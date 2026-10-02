@@ -48,7 +48,10 @@ function Words() {
     const list = input.split(/[\n,]+/).map((w) => w.trim().toLowerCase()).filter(Boolean).slice(0, 200);
     if (!list.length) return;
     const { error } = await supabase.from("slang_words").upsert(list.map((word) => ({ category: cat, word })), { onConflict: "category,word" });
-    if (error) return toast.error(error.message);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
     setInput("");
     toast.success(`Added ${list.length}`);
     qc.invalidateQueries({ queryKey: ["words"] });

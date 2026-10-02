@@ -20,7 +20,10 @@ export function useSettings() {
       .from("bot_settings")
       .update({ ...patch, updated_at: new Date().toISOString() })
       .eq("id", 1);
-    if (error) return toast.error(error.message);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
     toast.success("Saved — the bot picks this up within a minute");
     qc.invalidateQueries({ queryKey: ["settings"] });
   };
