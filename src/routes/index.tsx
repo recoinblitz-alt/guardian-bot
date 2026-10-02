@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Shell, Panel } from "@/components/Shell";
+import { Shell, Panel, ActionBadge } from "@/components/Shell";
 import { useSettings, CATEGORY_LABEL } from "@/lib/settings";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -126,14 +126,3 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: str
   );
 }
 
-export function ActionBadge({ action }: { action: string }) {
-  const cls =
-    action === "ban"
-      ? "bg-destructive text-destructive-foreground"
-      : action === "timeout"
-        ? "bg-primary text-primary-foreground"
-        : action === "alert"
-          ? "bg-chart-4 text-primary-foreground"
-          : "bg-accent text-accent-foreground";
-  return <span className={`rounded px-2 py-0.5 font-mono text-xs uppercase ${cls}`}>{action}</span>;
-}

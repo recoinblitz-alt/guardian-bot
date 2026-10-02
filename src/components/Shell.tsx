@@ -117,3 +117,15 @@ export function Panel({ title, desc, children }: { title: string; desc?: string;
     </section>
   );
 }
+
+export function ActionBadge({ action }: { action: string }) {
+  const cls =
+    action === "ban"
+      ? "bg-destructive text-destructive-foreground"
+      : action === "timeout"
+        ? "bg-primary text-primary-foreground"
+        : action === "alert"
+          ? "bg-chart-4 text-primary-foreground"
+          : "bg-accent text-accent-foreground";
+  return <span className={`rounded px-2 py-0.5 font-mono text-xs uppercase ${cls}`}>{action}</span>;
+}
