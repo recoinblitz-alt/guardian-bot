@@ -26,8 +26,8 @@ const DEVA: Record<string, string> = {
   "प": "p", "फ": "ph", "ब": "b", "भ": "bh", "म": "m", "य": "y", "र": "r", "ल": "l", "व": "v",
   "श": "sh", "ष": "sh", "स": "s", "ह": "h", "क़": "k", "ख़": "kh", "ग़": "g", "ज़": "z", "ड़": "d", "ढ़": "dh", "फ़": "f",
 };
-const DEVA_CONSONANT = /[क-हक़-य़]/;
-const DEVA_MATRA = /[ा-ौ्ृंँ]/;
+const DEVA_CONSONANT = /[\u0915-\u0939\u0958-\u095F]/;
+const DEVA_MATRA = /[\u0900-\u0903\u093C-\u094D]/;
 
 function transliterate(text: string): string {
   let out = "";
