@@ -166,7 +166,7 @@ export function findMatches(transcript: string, list: CompiledList, fuzzy = true
       for (let k = 1; k < e.tokens.length && ok; k++) {
         ok = false;
         for (let gap = 1; gap <= 3 && pos + gap < tokens.length; gap++) {
-          const m = tokenMatch(tokens[pos + gap], e.tokens[k], fuzzy);
+          const m = tokenMatch(tokens[pos + gap]!, e.tokens[k]!, fuzzy);
           if (m && !blocked[pos + gap]) {
             if (m !== "exact") how = m;
             pos += gap; ok = true; break;
