@@ -14,16 +14,165 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      bot_settings: {
+        Row: {
+          alert_channel_id: string
+          alert_role_id: string
+          bot_api_key: string
+          bot_last_seen: string | null
+          bot_status: Json
+          category_weights: Json
+          fuzzy_matching: boolean
+          id: number
+          ignored_role_ids: string[]
+          ignored_user_ids: string[]
+          ladder: Json
+          log_channel_id: string
+          sexual_instant_ban: boolean
+          updated_at: string
+          voice_channel_ids: string[]
+          warning_expiry_days: number
+        }
+        Insert: {
+          alert_channel_id?: string
+          alert_role_id?: string
+          bot_api_key?: string
+          bot_last_seen?: string | null
+          bot_status?: Json
+          category_weights?: Json
+          fuzzy_matching?: boolean
+          id?: number
+          ignored_role_ids?: string[]
+          ignored_user_ids?: string[]
+          ladder?: Json
+          log_channel_id?: string
+          sexual_instant_ban?: boolean
+          updated_at?: string
+          voice_channel_ids?: string[]
+          warning_expiry_days?: number
+        }
+        Update: {
+          alert_channel_id?: string
+          alert_role_id?: string
+          bot_api_key?: string
+          bot_last_seen?: string | null
+          bot_status?: Json
+          category_weights?: Json
+          fuzzy_matching?: boolean
+          id?: number
+          ignored_role_ids?: string[]
+          ignored_user_ids?: string[]
+          ladder?: Json
+          log_channel_id?: string
+          sexual_instant_ban?: boolean
+          updated_at?: string
+          voice_channel_ids?: string[]
+          warning_expiry_days?: number
+        }
+        Relationships: []
+      }
+      infractions: {
+        Row: {
+          action: string
+          category: string
+          channel_name: string
+          cleared: boolean
+          created_at: string
+          discord_user_id: string
+          duration_seconds: number
+          id: string
+          matched: string
+          points: number
+          transcript: string
+          username: string
+        }
+        Insert: {
+          action: string
+          category: string
+          channel_name?: string
+          cleared?: boolean
+          created_at?: string
+          discord_user_id: string
+          duration_seconds?: number
+          id?: string
+          matched?: string
+          points?: number
+          transcript?: string
+          username?: string
+        }
+        Update: {
+          action?: string
+          category?: string
+          channel_name?: string
+          cleared?: boolean
+          created_at?: string
+          discord_user_id?: string
+          duration_seconds?: number
+          id?: string
+          matched?: string
+          points?: number
+          transcript?: string
+          username?: string
+        }
+        Relationships: []
+      }
+      slang_words: {
+        Row: {
+          category: string
+          created_at: string
+          id: string
+          language: string
+          word: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          id?: string
+          language?: string
+          word: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          id?: string
+          language?: string
+          word?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "moderator" | "user"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +299,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "moderator", "user"],
+    },
   },
 } as const
