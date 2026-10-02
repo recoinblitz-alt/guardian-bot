@@ -45,8 +45,16 @@ async function handle(request: Request, action: string) {
   switch (action) {
     case "config": {
       const { data: words } = await db.from("slang_words").select("category, word");
-      const { bot_api_key: _k, ...rest } = settings;
-      return json({ settings: rest, words: words ?? [] });
+      const { bot_api_key: _k, discord_token: _t, deepgram_keys: dk, ...rest } = settings;
+      // fingerprint lets the bot notice credential changes without receiving them every minute
+      const fp = `${_t.length}:${_t.slice(-6)}|${dk.map((k: string) => k.slice(-6)).join(",")}`;
+      return json({ settings: rest, words: words ?? [], credentials_fp: fp });
+    }
+    case "credentials": {
+      return json({
+        discord_token: settings.discord_token,
+        deepgram_keys: settings.deepgram_keys.filter((k: string) => k.trim()),
+      });
     }
     case "heartbeat": {
       const body = await request.json().catch(() => ({}));
