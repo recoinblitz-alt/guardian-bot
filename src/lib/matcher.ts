@@ -125,8 +125,9 @@ function tokenMatch(heard: string, target: string, fuzzy: boolean): Match["how"]
   const short = pt.length <= 4;
   if (short ? phonetic(heard, false) === phonetic(target, false) : ph === pt) return "sound-alike";
   if (!fuzzy) return null;
-  const max = pt.length >= 8 ? 2 : pt.length >= 6 ? 1 : 0;
-  if (max > 0 && lev(ph, pt, max) <= max) return "fuzzy";
+  // fuzzy = one typo, only for long words, and the first 3 sounds must agree.
+  // (stops normal Hindi like kamane->kameena, nikal->nikamma)
+  if (pt.length >= 8 && ph.slice(0, 3) === pt.slice(0, 3) && lev(ph, pt, 1) <= 1) return "fuzzy";
   return null;
 }
 
@@ -160,7 +161,8 @@ export function findMatches(transcript: string, list: CompiledList, fuzzy = true
       let pos = start;
       // split compounds: "behen chod" should match "behenchod"
       if (!first && e.tokens.length === 1 && start + 1 < tokens.length && !blocked[start + 1]) {
-        first = tokenMatch(tokens[start]! + tokens[start + 1]!, e.tokens[0]!, fuzzy);
+        first = tokenMatch(tokens[start]! + tokens[start + 1]!, e.tokens[0]!, false);
+        if (first === "fuzzy") first = null;
         if (first) pos = start + 1;
       }
       if (!first) continue;
