@@ -772,3 +772,5 @@ insert into public.slang_words(category,word,language) values
 ('sexual','zavnya','marathi'),
 ('sexual','zhavadya','marathi')
 on conflict (category,word) do nothing;
+
+alter table public.bot_settings add column text_channel_ids text[] not null default '{}', add column text_all_channels boolean not null default false;

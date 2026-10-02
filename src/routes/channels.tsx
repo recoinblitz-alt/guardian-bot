@@ -29,9 +29,9 @@ const toList = (s: string) => s.split(/[\s,]+/).map((x) => x.trim()).filter((x) 
 
 function Channels() {
   const { data, save } = useSettings();
-  const [f, setF] = useState<Partial<Settings> & { vc: string; iu: string; ir: string }>({ vc: "", iu: "", ir: "" });
+  const [f, setF] = useState<Partial<Settings> & { vc: string; tc: string; iu: string; ir: string }>({ vc: "", tc: "", iu: "", ir: "" });
   useEffect(() => {
-    if (data) setF({ ...data, vc: data.voice_channel_ids.join("\n"), iu: data.ignored_user_ids.join("\n"), ir: data.ignored_role_ids.join("\n") });
+    if (data) setF({ ...data, vc: data.voice_channel_ids.join("\n"), tc: (data.text_channel_ids ?? []).join("\n"), iu: data.ignored_user_ids.join("\n"), ir: data.ignored_role_ids.join("\n") });
   }, [data]);
   if (!data) return null;
 
@@ -41,6 +41,8 @@ function Channels() {
         e.preventDefault();
         save({
           voice_channel_ids: toList(f.vc),
+          text_channel_ids: toList(f.tc),
+          text_all_channels: !!f.text_all_channels,
           ignored_user_ids: toList(f.iu),
           ignored_role_ids: toList(f.ir),
           log_channel_id: (f.log_channel_id ?? "").trim(),
@@ -54,6 +56,13 @@ function Channels() {
       </p>
       <Panel title="Voice channels to watch" desc="The bot joins these automatically and stays. One ID per line.">
         <Textarea rows={4} className="font-mono" value={f.vc} onChange={(e) => setF({ ...f, vc: e.target.value })} />
+      </Panel>
+      <Panel title="Text channels to watch" desc="Messages with slang are deleted and get the same punishment as voice. One ID per line (e.g. #general).">
+        <label className="mb-3 flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={!!f.text_all_channels} onChange={(e) => setF({ ...f, text_all_channels: e.target.checked })} />
+          Watch every text channel in the server
+        </label>
+        <Textarea rows={3} className="font-mono" disabled={!!f.text_all_channels} value={f.tc} onChange={(e) => setF({ ...f, tc: e.target.value })} />
       </Panel>
       <Panel title="Reporting">
         <div className="grid gap-4 sm:grid-cols-3">
