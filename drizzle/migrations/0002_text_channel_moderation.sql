@@ -1,0 +1,1 @@
+alter table public.bot_settings add column text_channel_ids text[] not null default '{}', add column text_all_channels boolean not null default false;

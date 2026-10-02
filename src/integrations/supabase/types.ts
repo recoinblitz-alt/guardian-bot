@@ -29,6 +29,8 @@ export type Database = {
           ladder: Json
           log_channel_id: string
           sexual_instant_ban: boolean
+          text_all_channels: boolean
+          text_channel_ids: string[]
           updated_at: string
           voice_channel_ids: string[]
           warning_expiry_days: number
@@ -47,6 +49,8 @@ export type Database = {
           ladder?: Json
           log_channel_id?: string
           sexual_instant_ban?: boolean
+          text_all_channels?: boolean
+          text_channel_ids?: string[]
           updated_at?: string
           voice_channel_ids?: string[]
           warning_expiry_days?: number
@@ -65,6 +69,8 @@ export type Database = {
           ladder?: Json
           log_channel_id?: string
           sexual_instant_ban?: boolean
+          text_all_channels?: boolean
+          text_channel_ids?: string[]
           updated_at?: string
           voice_channel_ids?: string[]
           warning_expiry_days?: number
