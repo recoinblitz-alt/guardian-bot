@@ -1,0 +1,1 @@
+alter table public.bot_settings add column discord_token text not null default '', add column deepgram_keys text[] not null default '{}';

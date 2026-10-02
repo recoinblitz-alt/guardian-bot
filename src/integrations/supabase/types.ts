@@ -22,6 +22,8 @@ export type Database = {
           bot_last_seen: string | null
           bot_status: Json
           category_weights: Json
+          deepgram_keys: string[]
+          discord_token: string
           fuzzy_matching: boolean
           id: number
           ignored_role_ids: string[]
@@ -42,6 +44,8 @@ export type Database = {
           bot_last_seen?: string | null
           bot_status?: Json
           category_weights?: Json
+          deepgram_keys?: string[]
+          discord_token?: string
           fuzzy_matching?: boolean
           id?: number
           ignored_role_ids?: string[]
@@ -62,6 +66,8 @@ export type Database = {
           bot_last_seen?: string | null
           bot_status?: Json
           category_weights?: Json
+          deepgram_keys?: string[]
+          discord_token?: string
           fuzzy_matching?: boolean
           id?: number
           ignored_role_ids?: string[]
