@@ -14,13 +14,16 @@ const prism = require("prism-media");
 const DeepgramManager = require("./deepgram-manager");
 const { compile, findMatches } = require("./matcher");
 
-const { DISCORD_TOKEN, PANEL_URL, BOT_KEY } = process.env;
-if (!DISCORD_TOKEN || !PANEL_URL || !BOT_KEY) {
-  console.error("❌ Set DISCORD_TOKEN, PANEL_URL and BOT_KEY in .env (copy the last two from the panel Overview page).");
+const { PANEL_URL, BOT_KEY } = process.env;
+if (!PANEL_URL || !BOT_KEY) {
+  console.error("❌ Set PANEL_URL and BOT_KEY in .env (copy both from the panel Overview page).");
   process.exit(1);
 }
+// Exit code 75 = "restart me" (run.js / start-all restart the bot with fresh credentials)
+const RESTART_CODE = 75;
+let credentialsFp = null;
 
-const deepgram = new DeepgramManager();
+let deepgram = null;
 let config = null; // { settings, words }
 let compiled = compile([]);
 let activeKeyId = null;
@@ -43,6 +46,13 @@ async function loadConfig() {
   try {
     config = await api("config");
     compiled = compile(config.words);
+    if (config.credentials_fp) {
+      if (credentialsFp && credentialsFp !== config.credentials_fp) {
+        console.log("🔁 Token or Deepgram keys changed in the panel — restarting…");
+        process.exit(RESTART_CODE);
+      }
+      credentialsFp = config.credentials_fp;
+    }
     console.log(`🔄 Config loaded: ${config.words.length} words, ${config.settings.voice_channel_ids.length} voice channels`);
   } catch (e) {
     console.error("⚠️ Could not load config:", e.message);
@@ -380,4 +390,30 @@ client.once("clientReady", async () => {
 });
 
 process.on("unhandledRejection", (e) => console.error("Unhandled:", e));
-client.login(DISCORD_TOKEN);
+// Token + Deepgram keys come from the panel (Overview page); .env values are only a fallback.
+async function start() {
+  let creds = null;
+  for (let attempt = 1; !creds; attempt++) {
+    try {
+      creds = await api("credentials");
+    } catch (e) {
+      console.error(`⚠️ Could not reach panel (try ${attempt}):`, e.message);
+      if (attempt >= 30) process.exit(1);
+      await new Promise((r) => setTimeout(r, 5000));
+    }
+  }
+  const token = (creds.discord_token || process.env.DISCORD_TOKEN || "").trim();
+  if (creds.deepgram_keys?.length) {
+    for (let i = 1; i <= 10; i++) delete process.env[`DEEPGRAM_KEY_${i}`];
+    creds.deepgram_keys.slice(0, 10).forEach((k, i) => (process.env[`DEEPGRAM_KEY_${i + 1}`] = k));
+  }
+  if (!token) {
+    console.error("❌ No Discord bot token. Add it on the panel Overview page (Bot token & Deepgram keys).");
+    await new Promise((r) => setTimeout(r, 60_000));
+    process.exit(RESTART_CODE);
+  }
+  deepgram = new DeepgramManager();
+  await loadConfig();
+  client.login(token);
+}
+start();
