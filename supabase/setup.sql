@@ -300,7 +300,7 @@ insert into public.slang_words(category,word,language) values
 ('allow','bcs','english'),
 ('allow','bhagwan','hindi'),
 ('allow','bitcoin','english'),
-('allow','chut-putiya','hindi'),
+
 ('allow','chutney','hindi'),
 ('allow','class','english'),
 ('allow','classic','english'),

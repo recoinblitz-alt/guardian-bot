@@ -4,6 +4,7 @@ import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Shell, Panel, ActionBadge } from "@/components/Shell";
 import { useSettings, CATEGORY_LABEL } from "@/lib/settings";
+import { CredentialsPanel } from "@/components/CredentialsPanel";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Copy, Eye, EyeOff } from "lucide-react";
@@ -35,7 +36,7 @@ type Status = {
 };
 
 function Overview() {
-  const { data: s } = useSettings();
+  const { data: s, save } = useSettings();
   const [show, setShow] = useState(false);
   const recent = useQuery({
     queryKey: ["recent"],
@@ -77,6 +78,8 @@ function Overview() {
           <Copy className="mr-2 h-3.5 w-3.5" /> Copy both
         </Button>
       </Panel>
+
+      <CredentialsPanel s={s} save={save} />
 
       <Panel title="Deepgram keys" desc="Reported by the bot. When a key runs out it switches to the next one automatically.">
         {st.keys?.length ? (

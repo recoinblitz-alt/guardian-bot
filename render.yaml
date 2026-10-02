@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: voiceguard
+    runtime: node
+    plan: starter # free plan sleeps after 15 min and the bot would disconnect
+    buildCommand: npm install && npm install --prefix bot && NITRO_PRESET=node_server npm run build
+    startCommand: node start-all.mjs
+    healthCheckPath: /auth
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: VITE_SUPABASE_PROJECT_ID
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
