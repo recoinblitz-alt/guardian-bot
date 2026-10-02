@@ -10,11 +10,41 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthRouteImport } from './routes/auth'
+import { Route as ChannelsRouteImport } from './routes/channels'
+import { Route as HistoryRouteImport } from './routes/history'
+import { Route as RulesRouteImport } from './routes/rules'
+import { Route as WordsRouteImport } from './routes/words'
 import { Route as ApiPublicBotActionRouteImport } from './routes/api/public/bot.$action'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ChannelsRoute = ChannelsRouteImport.update({
+  id: '/channels',
+  path: '/channels',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HistoryRoute = HistoryRouteImport.update({
+  id: '/history',
+  path: '/history',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RulesRoute = RulesRouteImport.update({
+  id: '/rules',
+  path: '/rules',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WordsRoute = WordsRouteImport.update({
+  id: '/words',
+  path: '/words',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiPublicBotActionRoute = ApiPublicBotActionRouteImport.update({
@@ -25,27 +55,69 @@ const ApiPublicBotActionRoute = ApiPublicBotActionRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
+  '/channels': typeof ChannelsRoute
+  '/history': typeof HistoryRoute
+  '/rules': typeof RulesRoute
+  '/words': typeof WordsRoute
   '/api/public/bot/$action': typeof ApiPublicBotActionRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
+  '/channels': typeof ChannelsRoute
+  '/history': typeof HistoryRoute
+  '/rules': typeof RulesRoute
+  '/words': typeof WordsRoute
   '/api/public/bot/$action': typeof ApiPublicBotActionRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
+  '/channels': typeof ChannelsRoute
+  '/history': typeof HistoryRoute
+  '/rules': typeof RulesRoute
+  '/words': typeof WordsRoute
   '/api/public/bot/$action': typeof ApiPublicBotActionRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/public/bot/$action'
+  fullPaths:
+    | '/'
+    | '/auth'
+    | '/channels'
+    | '/history'
+    | '/rules'
+    | '/words'
+    | '/api/public/bot/$action'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/public/bot/$action'
-  id: '__root__' | '/' | '/api/public/bot/$action'
+  to:
+    | '/'
+    | '/auth'
+    | '/channels'
+    | '/history'
+    | '/rules'
+    | '/words'
+    | '/api/public/bot/$action'
+  id:
+    | '__root__'
+    | '/'
+    | '/auth'
+    | '/channels'
+    | '/history'
+    | '/rules'
+    | '/words'
+    | '/api/public/bot/$action'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AuthRoute: typeof AuthRoute
+  ChannelsRoute: typeof ChannelsRoute
+  HistoryRoute: typeof HistoryRoute
+  RulesRoute: typeof RulesRoute
+  WordsRoute: typeof WordsRoute
   ApiPublicBotActionRoute: typeof ApiPublicBotActionRoute
 }
 
@@ -56,6 +128,41 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/channels': {
+      id: '/channels'
+      path: '/channels'
+      fullPath: '/channels'
+      preLoaderRoute: typeof ChannelsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/history': {
+      id: '/history'
+      path: '/history'
+      fullPath: '/history'
+      preLoaderRoute: typeof HistoryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/rules': {
+      id: '/rules'
+      path: '/rules'
+      fullPath: '/rules'
+      preLoaderRoute: typeof RulesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/words': {
+      id: '/words'
+      path: '/words'
+      fullPath: '/words'
+      preLoaderRoute: typeof WordsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/bot/$action': {
@@ -70,6 +177,11 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AuthRoute: AuthRoute,
+  ChannelsRoute: ChannelsRoute,
+  HistoryRoute: HistoryRoute,
+  RulesRoute: RulesRoute,
+  WordsRoute: WordsRoute,
   ApiPublicBotActionRoute: ApiPublicBotActionRoute,
 }
 export const routeTree = rootRouteImport
