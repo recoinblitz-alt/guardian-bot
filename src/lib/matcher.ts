@@ -154,9 +154,15 @@ export function findMatches(transcript: string, list: CompiledList, fuzzy = true
   for (const e of list.entries) {
     for (let start = 0; start < tokens.length; start++) {
       if (blocked[start]) continue;
-      const first = tokenMatch(tokens[start], e.tokens[0], fuzzy);
+      let first = tokenMatch(tokens[start], e.tokens[0], fuzzy);
+      let pos = start;
+      // split compounds: "behen chod" should match "behenchod"
+      if (!first && e.tokens.length === 1 && start + 1 < tokens.length && !blocked[start + 1]) {
+        first = tokenMatch(tokens[start] + tokens[start + 1], e.tokens[0], fuzzy);
+        if (first) pos = start + 1;
+      }
       if (!first) continue;
-      let pos = start, how: Match["how"] = first, ok = true;
+      let how: Match["how"] = first, ok = true;
       for (let k = 1; k < e.tokens.length && ok; k++) {
         ok = false;
         for (let gap = 1; gap <= 3 && pos + gap < tokens.length; gap++) {
