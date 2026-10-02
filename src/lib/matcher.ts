@@ -66,17 +66,21 @@ export function normalize(text: string): string[] {
   const raw = t.split(/\s+/).filter(Boolean);
   // join spelled-out letters: "b c" / "bee see" / "em see" -> "bc" / "mc"
   const tokens: string[] = [];
-  let buf = "";
+  let letters = "";
+  let originals: string[] = [];
+  const flush = () => {
+    if (letters.length >= 2) tokens.push(letters);
+    else tokens.push(...originals);
+    letters = "";
+    originals = [];
+  };
   for (const w of raw) {
     const letter = SPOKEN_LETTERS[w];
-    if (letter && (w.length === 1 || buf.length > 0 || w.length <= 3)) {
-      buf += letter;
-      continue;
-    }
-    if (buf) { tokens.push(buf.length === 1 ? raw[tokens.length] ?? buf : buf); buf = ""; }
+    if (letter) { letters += letter; originals.push(w); continue; }
+    flush();
     tokens.push(w);
   }
-  if (buf) tokens.push(buf);
+  flush();
   return tokens;
 }
 
