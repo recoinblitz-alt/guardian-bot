@@ -90,13 +90,13 @@ function squash(w: string): string {
 }
 
 // rough Hinglish phonetic key
-export function phonetic(w: string): string {
+export function phonetic(w: string, foldEnding = true): string {
   let s = squash(w);
   s = s.replace(/ph/g, "f").replace(/ck/g, "k").replace(/q/g, "k").replace(/z/g, "j").replace(/w/g, "v");
   s = s.replace(/ee/g, "i").replace(/oo/g, "u").replace(/y/g, "i");
   s = s.replace(/([bcdgjkpt])h/g, "$1"); // bh->b, kh->k, ch->c
   s = s.replace(/sh/g, "s");
-  s = s.replace(/[aeiou]+$/g, "a"); // ending vowels sound alike (chutiya/chutiye)
+  if (foldEnding) s = s.replace(/[aeiou]+$/g, "a"); // ending vowels sound alike (chutiya/chutiye)
   s = s.replace(/(.)\1+/g, "$1");
   return s;
 }
@@ -121,9 +121,11 @@ function tokenMatch(heard: string, target: string, fuzzy: boolean): Match["how"]
   if (heard === target || squash(heard) === squash(target)) return "exact";
   if (target.length <= 3) return null; // short words like bc / mc must be exact
   const ph = phonetic(heard), pt = phonetic(target);
-  if (ph === pt) return "sound-alike";
+  // short words (gadha/gaadi, kutta/kutti...) must keep their ending sound to count
+  const short = pt.length <= 4;
+  if (short ? phonetic(heard, false) === phonetic(target, false) : ph === pt) return "sound-alike";
   if (!fuzzy) return null;
-  const max = pt.length >= 8 ? 2 : pt.length >= 5 ? 1 : 0;
+  const max = pt.length >= 8 ? 2 : pt.length >= 6 ? 1 : 0;
   if (max > 0 && lev(ph, pt, max) <= max) return "fuzzy";
   return null;
 }
