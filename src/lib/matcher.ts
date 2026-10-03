@@ -122,6 +122,10 @@ function lev(a: string, b: string, max: number): number {
 function tokenMatch(heard: string, target: string, fuzzy: boolean): Match["how"] | null {
   if (heard === target || squash(heard) === squash(target)) return "exact";
   if (target.length <= 3) return null; // short words like bc / mc must be exact
+  // Hindi छ / "chh" is a different sound from च / "ch". In particular,
+  // "chhod/chhodo" (leave/release) must never match the abusive "chod".
+  if (squash(heard).startsWith("chh") !== squash(target).startsWith("chh") &&
+      (squash(heard).startsWith("ch") || squash(target).startsWith("ch"))) return null;
   const ph = phonetic(heard), pt = phonetic(target);
   // short words (gadha/gaadi, kutta/kutti...) must keep their ending sound to count
   const short = pt.length <= 4;
