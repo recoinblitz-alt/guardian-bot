@@ -26,6 +26,7 @@ On Railway/Render: create a "worker"/background service from this folder, add th
 - Each person's speech goes to Deepgram (multilingual). The text is checked by `matcher.js`; low-confidence words and tiny one-word noise clips are ignored before punishment.
 - The panel decides the punishment using your points ladder; the bot carries it out and posts an embed in the log channel.
 - Provoking → tags your chosen role in the alert channel.
+- Uncertain voice sound-alikes are sent to the alert channel for 10 minutes with Warn, Timeout 10m, Ban, and Ignore buttons. Exact keywords and confident matches still follow the ladder automatically.
 
 Slash commands (moderators only): /warnings /clearwarnings /addword /removeword /join /leave /status
 

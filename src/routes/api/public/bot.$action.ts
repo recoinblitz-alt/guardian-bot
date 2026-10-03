@@ -36,6 +36,11 @@ const offenseSchema = z.object({
   transcript: z.string().transform((s) => s.slice(0, 1000)).default(""),
 });
 
+const reviewOffenseSchema = offenseSchema.extend({
+  action: z.enum(["warn", "timeout", "ban"]),
+  duration_seconds: z.number().int().min(0).max(2419200),
+});
+
 async function handle(request: Request, action: string) {
   const ctx = await authorize(request);
   if (!ctx) return json({ error: "Invalid bot key" }, 401);
@@ -74,6 +79,20 @@ async function handle(request: Request, action: string) {
         weights: settings.category_weights as Record<string, number>,
         sexualInstantBan: settings.sexual_instant_ban,
       });
+      await db.from("infractions").insert({ ...o, action: d.action, duration_seconds: d.duration, points: d.points });
+      return json(d);
+    }
+    case "review-offense": {
+      const parsed = reviewOffenseSchema.safeParse(await request.json().catch(() => null));
+      if (!parsed.success) return json({ error: parsed.error.flatten() }, 400);
+      const { action: reviewedAction, duration_seconds, ...o } = parsed.data;
+      const prior = await activePoints(db, o.discord_user_id, settings.warning_expiry_days);
+      const automatic = decide(o.category, prior, {
+        ladder: settings.ladder as unknown as LadderStep[],
+        weights: settings.category_weights as Record<string, number>,
+        sexualInstantBan: false,
+      });
+      const d = { ...automatic, action: reviewedAction, duration: reviewedAction === "timeout" ? duration_seconds : 0 };
       await db.from("infractions").insert({ ...o, action: d.action, duration_seconds: d.duration, points: d.points });
       return json(d);
     }
