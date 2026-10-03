@@ -30,6 +30,9 @@ export type Database = {
           ignored_user_ids: string[]
           ladder: Json
           log_channel_id: string
+          min_confidence: number
+          min_confidence_short: number
+          server_words: string[]
           sexual_instant_ban: boolean
           text_all_channels: boolean
           text_channel_ids: string[]
@@ -52,6 +55,9 @@ export type Database = {
           ignored_user_ids?: string[]
           ladder?: Json
           log_channel_id?: string
+          min_confidence?: number
+          min_confidence_short?: number
+          server_words?: string[]
           sexual_instant_ban?: boolean
           text_all_channels?: boolean
           text_channel_ids?: string[]
@@ -74,6 +80,9 @@ export type Database = {
           ignored_user_ids?: string[]
           ladder?: Json
           log_channel_id?: string
+          min_confidence?: number
+          min_confidence_short?: number
+          server_words?: string[]
           sexual_instant_ban?: boolean
           text_all_channels?: boolean
           text_channel_ids?: string[]
