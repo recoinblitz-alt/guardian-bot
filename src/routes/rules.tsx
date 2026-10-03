@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Trash2 } from "lucide-react";
 
@@ -35,6 +36,8 @@ function Rules() {
   const [expiry, setExpiry] = useState(30);
   const [instantBan, setInstantBan] = useState(true);
   const [fuzzy, setFuzzy] = useState(true);
+  const [conf, setConf] = useState(85);
+  const [confShort, setConfShort] = useState(92);
 
   useEffect(() => {
     if (!data) return;
@@ -43,6 +46,8 @@ function Rules() {
     setExpiry(data.warning_expiry_days);
     setInstantBan(data.sexual_instant_ban);
     setFuzzy(data.fuzzy_matching);
+    setConf(Math.round((data.min_confidence ?? 0.85) * 100));
+    setConfShort(Math.round((data.min_confidence_short ?? 0.92) * 100));
   }, [data]);
   if (!data) return null;
 
@@ -107,6 +112,16 @@ function Rules() {
         </div>
       </Panel>
 
+      <Panel
+        title="Voice: how sure before punishing"
+        desc="Speech-to-text gives every word a 'how sure' score. The bot only punishes voice when it is at least this sure about the bad word. Higher = fewer wrong punishments, but mumbled slang may be missed."
+      >
+        <div className="space-y-5">
+          <ConfRow label="Normal words" value={conf} onChange={setConf} />
+          <ConfRow label="Short words (bc, mc, bsdk…)" value={confShort} onChange={setConfShort} />
+        </div>
+      </Panel>
+
       <Button
         onClick={() =>
           save({
@@ -115,12 +130,26 @@ function Rules() {
             warning_expiry_days: Math.max(1, expiry),
             sexual_instant_ban: instantBan,
             fuzzy_matching: fuzzy,
+            min_confidence: conf / 100,
+            min_confidence_short: confShort / 100,
           })
         }
       >
         Save rules
       </Button>
     </>
+  );
+}
+
+function ConfRow({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
+  return (
+    <div>
+      <div className="mb-2 flex items-center justify-between text-sm">
+        <span className="font-medium">{label}</span>
+        <span className="font-mono text-primary">{value}%</span>
+      </div>
+      <Slider min={50} max={99} step={1} value={[value]} onValueChange={(v) => onChange(v[0] ?? value)} />
+    </div>
   );
 }
 
