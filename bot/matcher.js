@@ -220,7 +220,7 @@ function tokenMatch(heard, target, fuzzy) {
     return "exact";
   if (target.length <= 3)
     return null;
-  if (squash(heard).startsWith("chh") !== squash(target).startsWith("chh") && (squash(heard).startsWith("ch") || squash(target).startsWith("ch")))
+  if (heard.startsWith("chh") !== target.startsWith("chh") && (heard.startsWith("ch") || target.startsWith("ch")))
     return null;
   const ph = phonetic(heard), pt = phonetic(target);
   const short = pt.length <= 4;
