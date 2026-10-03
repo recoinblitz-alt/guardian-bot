@@ -133,6 +133,10 @@ function tokenMatch(heard: string, target: string, fuzzy: boolean): Match["how"]
   return null;
 }
 
+function exactToken(heard: string, target: string): boolean {
+  return heard === target || squash(heard) === squash(target);
+}
+
 export interface CompiledList {
   entries: { category: Category; word: string; tokens: string[] }[];
   /** single safe words — never punished anywhere */
@@ -195,6 +199,21 @@ export function findMatches(transcript: string, list: CompiledList, fuzzy = true
   const found: Match[] = [];
   const seen = new Set<string>();
   for (const e of list.entries) {
+    // Sexual-harassment terms are deliberately strict: every normalized token
+    // must occur consecutively and exactly. Sound-alikes and filler-word phrase
+    // matching are too risky for the strongest punishment category.
+    if (e.category === "sexual") {
+      for (let start = 0; start + e.tokens.length <= tokens.length; start++) {
+        if (e.tokens.some((target, offset) => blocked[start + offset] || !exactToken(tokens[start + offset]!, target))) continue;
+        const key = `${e.category}|${e.word}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          found.push({ category: e.category, word: e.word, heard: tokens.slice(start, start + e.tokens.length).join(" "), how: "exact" });
+        }
+        break;
+      }
+      continue;
+    }
     for (let start = 0; start < tokens.length; start++) {
       if (blocked[start]) continue;
       let first = tokenMatch(tokens[start]!, e.tokens[0]!, fuzzy);
