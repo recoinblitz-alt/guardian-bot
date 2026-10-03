@@ -23,7 +23,7 @@ On Railway/Render: create a "worker"/background service from this folder, add th
 ## How it works
 - Every minute it reloads settings and word lists from the panel. Change things in the panel, no restart needed.
 - Every 15 s it checks it's in all assigned voice channels and rejoins if kicked/disconnected.
-- Each person's speech goes to Deepgram (Hindi + English). The text is checked by `matcher.js` (spelling variants, "bee see" → bc, Hindi script, sound-alikes, phrases with filler words, allow-list).
+- Each person's speech goes to Deepgram (multilingual). The text is checked by `matcher.js`; low-confidence words and tiny one-word noise clips are ignored before punishment.
 - The panel decides the punishment using your points ladder; the bot carries it out and posts an embed in the log channel.
 - Provoking → tags your chosen role in the alert channel.
 
@@ -36,10 +36,11 @@ The bot now only sends real speech: silence, coughs, clicks and keyboard noise a
 before anything reaches Deepgram, and audio is shrunk to 16 kHz mono.
 Optional `.env` tuning:
 ```
-VAD_THRESHOLD=700        # raise (e.g. 1000) if background noise still gets sent, lower if quiet voices are missed
+VAD_THRESHOLD=900        # raise (e.g. 1100) if background noise still gets sent, lower if quiet voices are missed
 MIN_SPEECH_MS=350        # how much speech before Deepgram is opened
 DEEPGRAM_LANGUAGE=multi  # multi = Hindi+English mix. Use "hi" for mostly Hindi/Punjabi speakers.
 ```
+Safe server terms such as `VC` and your server name are managed on the panel's Channels page. Slang is intentionally never sent as a recognition hint because that makes normal speech sound abusive.
 
 ## Text channels (new)
 Pick channels on the panel's **Channels & roles** page (or tick "every text channel").

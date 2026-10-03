@@ -1,4 +1,4 @@
-# Moving VoiceGuard to your own Supabase + Netlify
+# Deploy VoiceGuard website + Discord bot together on Render
 
 ## 1. Database (your Supabase project)
 1. Create a project at supabase.com.
@@ -8,10 +8,14 @@
 3. **Authentication > Providers**: make sure Email is on.
 4. **Project Settings > API**: copy the Project URL, the publishable (anon) key and the service_role key.
 
-## 2. Website (Netlify)
-1. Push this project to GitHub (Lovable: GitHub button, top right).
-2. Netlify > Add new site > Import from GitHub > pick the repo. `netlify.toml` fills in the build settings.
-3. Site settings > Environment variables, add:
+## 2. One Render Web Service
+1. Push this project to GitHub and create a Render Web Service from the repository.
+2. Choose the Starter plan or higher so the voice bot stays connected 24/7.
+3. Use these commands:
+   - Build: `bun install && bun install --cwd bot && NITRO_PRESET=node_server bun run build`
+   - Start: `node start-all.mjs`
+   - Health check: `/auth`
+4. Add these environment variables:
    | Name | Value |
    |---|---|
    | VITE_SUPABASE_URL | Project URL |
@@ -20,12 +24,8 @@
    | SUPABASE_URL | Project URL |
    | SUPABASE_PUBLISHABLE_KEY | publishable / anon key |
    | SUPABASE_SERVICE_ROLE_KEY | service_role key (keep secret) |
-4. Deploy. Open the site, sign up first — that account becomes the admin.
+5. Deploy. Open the site, sign up first — that account becomes the admin.
    (If Supabase asks you to confirm email, click the link in your inbox.)
 
-## 3. Point the bot at the new site
-In the bot's `.env`:
-```
-PANEL_URL=https://YOUR-SITE.netlify.app/api/public/bot
-BOT_KEY=<copy from the new site's Overview page>
-```
+## 3. Add bot credentials
+Open the deployed panel and add the Discord bot token and all Deepgram keys on Overview. The combined service reads them from the panel and starts both the website and bot.

@@ -189,6 +189,7 @@ function squash(w) {
 function phonetic(w, foldEnding = true) {
   let s = squash(w);
   s = s.replace(/ph/g, "f").replace(/ck/g, "k").replace(/q/g, "k").replace(/z/g, "j").replace(/w/g, "v");
+  s = s.replace(/c(?!h)/g, "k");
   s = s.replace(/ee/g, "i").replace(/oo/g, "u").replace(/y/g, "i");
   s = s.replace(/([bcdgjkpt])h/g, "$1");
   s = s.replace(/sh/g, "s");
@@ -229,24 +230,87 @@ function tokenMatch(heard, target, fuzzy) {
     return "fuzzy";
   return null;
 }
-function compile(words) {
+function compile(words, serverWords = []) {
   const entries = [];
   const allow = new Set;
+  const phrases = [];
+  const addSafe = (text) => {
+    const tokens = normalize(text).map(squash);
+    if (tokens.length === 1)
+      allow.add(tokens[0]);
+    else if (tokens.length > 1)
+      phrases.push(tokens);
+  };
   for (const w of words) {
+    if (w.category === "allow") {
+      addSafe(w.word);
+      continue;
+    }
     const tokens = normalize(w.word);
     if (!tokens.length)
       continue;
-    if (w.category === "allow") {
-      tokens.forEach((t) => allow.add(squash(t)));
-      continue;
-    }
     entries.push({ category: w.category, word: w.word, tokens });
   }
-  return { entries, allow };
+  serverWords.forEach(addSafe);
+  return { entries, allow, phrases };
+}
+var VC_CONTEXT = new Set([
+  "join",
+  "joined",
+  "joining",
+  "aa",
+  "aaja",
+  "aajao",
+  "aao",
+  "ao",
+  "mein",
+  "me",
+  "mai",
+  "main",
+  "in",
+  "chal",
+  "chalo",
+  "leave",
+  "left",
+  "wale",
+  "wala",
+  "wali",
+  "se",
+  "pe",
+  "par",
+  "on",
+  "off",
+  "call",
+  "voice",
+  "channel",
+  "chat",
+  "server",
+  "gangster",
+  "gangstar",
+  "gangsters"
+]);
+var VC_LIKE = new Set(["bc", "mc", "vc", "bsi", "vsi"]);
+function blockedTokens(tokens, list) {
+  const sq = tokens.map(squash);
+  const blocked = sq.map((t) => list.allow.has(t));
+  for (const p of list.phrases) {
+    for (let i = 0;i + p.length <= sq.length; i++) {
+      if (p.every((t, k) => sq[i + k] === t))
+        for (let k = 0;k < p.length; k++)
+          blocked[i + k] = true;
+    }
+  }
+  for (let i = 0;i < tokens.length; i++) {
+    if (!VC_LIKE.has(tokens[i]))
+      continue;
+    if (VC_CONTEXT.has(tokens[i - 1] ?? "") || VC_CONTEXT.has(tokens[i + 1] ?? ""))
+      blocked[i] = true;
+  }
+  return blocked;
 }
 function findMatches(transcript, list, fuzzy = true) {
   const tokens = normalize(transcript);
-  const blocked = tokens.map((t) => list.allow.has(squash(t)));
+  const blocked = blockedTokens(tokens, list);
   const found = [];
   const seen = new Set;
   for (const e of list.entries) {
@@ -255,12 +319,12 @@ function findMatches(transcript, list, fuzzy = true) {
         continue;
       let first = tokenMatch(tokens[start], e.tokens[0], fuzzy);
       let pos = start;
-      if (!first && e.tokens.length === 1 && start + 1 < tokens.length && !blocked[start + 1]) {
-        first = tokenMatch(tokens[start] + tokens[start + 1], e.tokens[0], false);
-        if (first === "fuzzy")
-          first = null;
-        if (first)
+      if (!first && e.tokens.length === 1 && e.tokens[0].length >= 5 && start + 1 < tokens.length && !blocked[start + 1]) {
+        const joined = tokens[start] + tokens[start + 1];
+        if (joined === e.tokens[0] || squash(joined) === squash(e.tokens[0])) {
+          first = "exact";
           pos = start + 1;
+        }
       }
       if (!first)
         continue;

@@ -12,7 +12,7 @@ const {
 } = require("@discordjs/voice");
 const prism = require("prism-media");
 const DeepgramManager = require("./deepgram-manager");
-const { compile, findMatches } = require("./matcher");
+const { compile, findMatches, normalize } = require("./matcher");
 
 const { PANEL_URL, BOT_KEY } = process.env;
 if (!PANEL_URL || !BOT_KEY) {
@@ -45,7 +45,7 @@ async function api(path, { method = "GET", body } = {}) {
 async function loadConfig() {
   try {
     config = await api("config");
-    compiled = compile(config.words);
+    compiled = compile(config.words, config.settings.server_words || []);
     if (config.credentials_fp) {
       if (credentialsFp && credentialsFp !== config.credentials_fp) {
         console.log("🔁 Token or Deepgram keys changed in the panel — restarting…");
@@ -139,8 +139,10 @@ function openDeepgram(member, channel, onText) {
   activeKeyId = account.id;
   return deepgram.createStream({
     account,
-    keyterms: compiled.entries.slice(0, 20).map((e) => e.word),
-    onTranscript: (r) => r.isFinal && r.transcript && onText(r.transcript),
+    // Only safe server words are recognition hints. Sending slang here causes
+    // Deepgram to hallucinate slang in ordinary speech (for example VC -> BC).
+    keyterms: config.settings.server_words || [],
+    onTranscript: (r) => r.isFinal && r.transcript && onText(r),
     onError: (err) => {
       const msg = String(err?.message || err);
       if (/401|402|403|insufficient|credit|balance|unauthori/i.test(msg)) {
@@ -156,7 +158,7 @@ function openDeepgram(member, channel, onText) {
 //  * silent frames are never sent (Deepgram bills per second of audio sent)
 //  * Deepgram is only opened after ~0.35 s of real speech, so coughs, clicks,
 //    keyboard noise and breathing never open a stream at all
-const VAD_RMS = Number(process.env.VAD_THRESHOLD) || 700; // raise if noise still gets sent
+const VAD_RMS = Number(process.env.VAD_THRESHOLD) || 900; // raise if noise still gets sent
 const MIN_SPEECH_MS = Number(process.env.MIN_SPEECH_MS) || 350;
 const HANGOVER_FRAMES = 15; // keep ~300 ms after a word so endings aren't cut
 
@@ -215,7 +217,7 @@ function listen(conn, member, channel) {
       preroll.push(out);
       if (voiced) voicedMs += 20;
       if (voicedMs < MIN_SPEECH_MS) return;
-      dg = openDeepgram(member, channel, (text) => moderate(member, channel, text));
+      dg = openDeepgram(member, channel, (speech) => moderate(member, channel, speech.transcript, null, speech));
       accountId = activeKeyId;
       if (!dg) return cleanup();
       preroll.forEach(push);
@@ -227,10 +229,54 @@ function listen(conn, member, channel) {
 }
 
 // ---------------------------------------------------------------- moderation
-async function moderate(member, channel, transcript, message = null) {
+function voiceConfidence(match, speech) {
+  const words = Array.isArray(speech?.words) ? speech.words : [];
+  if (!words.length) return { confidence: Number(speech?.confidence || 0), duration: 0 };
+  const heard = new Set(normalize(match.heard));
+  const relevant = words.filter((w) => normalize(w.word).some((t) => heard.has(t)));
+  const chosen = relevant.length ? relevant : words;
+  return {
+    confidence: Math.min(...chosen.map((w) => Number(w.confidence || 0))),
+    duration: Math.max(...chosen.map((w) => Number(w.end || 0))) - Math.min(...chosen.map((w) => Number(w.start || 0))),
+  };
+}
+
+function nextText(next) {
+  if (!next) return "This is the final level.";
+  const count = `${next.pointsLeft} more point${next.pointsLeft === 1 ? "" : "s"}`;
+  if (next.action === "timeout") return `${count} = ${Math.round(next.duration / 60)} minute timeout.`;
+  return `${count} = ${next.action}.`;
+}
+
+function warningText(member, channel, transcript, m, d, message) {
+  const place = message ? `#${channel.name}` : `voice channel ${channel.name}`;
+  const escaped = m.heard.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const marked = escaped ? transcript.replace(new RegExp(escaped, "i"), (word) => `**${word}**`) : transcript;
+  return [
+    `⚠️ **VoiceGuard — ${member.guild.name}**`,
+    `You said: “${marked.slice(0, 700)}”`,
+    `Caught: **${m.heard}** → matched **${m.word}** (${m.category})`,
+    `Where: ${place}`,
+    `Points now: **${d.total}**. ${nextText(d.next)}`,
+  ].join("\n");
+}
+
+async function moderate(member, channel, transcript, message = null, speech = null) {
   const matches = findMatches(transcript, compiled, config.settings.fuzzy_matching);
   if (!matches.length) return;
   const m = matches[0];
+  let confidence = null;
+  if (!message) {
+    const voice = voiceConfidence(m, speech);
+    confidence = voice.confidence;
+    const short = normalize(m.word).join("").length <= 4;
+    const required = Number(short ? (config.settings.min_confidence_short ?? 0.92) : (config.settings.min_confidence ?? 0.85));
+    // Very short, one-word clips are commonly noise. Never punish them.
+    if ((Array.isArray(speech?.words) && speech.words.length === 1 && voice.duration < 0.4) || confidence < required) {
+      console.log(`🟡 Ignored uncertain voice catch: "${transcript}" → ${m.word} (${Math.round(confidence * 100)}%, need ${Math.round(required * 100)}%)`);
+      return;
+    }
+  }
   if (message) await message.delete().catch((e) => console.warn("⚠️ couldn't delete message:", e.message));
   const last = cooldown.get(member.id) || 0;
   if (Date.now() - last < 4000) return;
@@ -250,18 +296,23 @@ async function moderate(member, channel, transcript, message = null) {
   const reason = `VoiceGuard: ${d.reason} — said "${m.heard}"`;
   let result = "done";
   try {
+    const notice = warningText(member, channel, transcript, m, d, message);
+    await member.send(notice).catch(() => {});
+    if (message) {
+      const sent = await channel.send(`⚠️ <@${member.id}>, your message was removed for saying **${m.heard}** (matched **${m.word}**).`).catch(() => null);
+      if (sent) setTimeout(() => sent.delete().catch(() => {}), 10_000);
+    }
     if (d.action === "timeout") await member.timeout(d.duration * 1000, reason);
     else if (d.action === "ban") await member.ban({ reason, deleteMessageSeconds: 0 });
-    else if (d.action === "warn") await member.send(`⚠️ Warning from **${member.guild.name}**: please don't use abusive language${message ? "" : " in voice chat"}. (${d.total} points)`).catch(() => {});
   } catch (e) {
     result = `failed: ${e.message}`;
   }
 
   if (d.action === "alert") await alert(member, channel, m, transcript);
-  await log(member, channel, m, transcript, d, result);
+  await log(member, channel, m, transcript, d, result, confidence);
 }
 
-async function log(member, channel, m, transcript, d, result) {
+async function log(member, channel, m, transcript, d, result, confidence = null) {
   const id = config.settings.log_channel_id;
   if (!id) return;
   const ch = await client.channels.fetch(id).catch(() => null);
@@ -276,6 +327,7 @@ async function log(member, channel, m, transcript, d, result) {
       { name: "Type", value: m.category, inline: true },
       { name: channel.isVoiceBased?.() ? "Heard" : "Wrote", value: `“${m.heard}” → matched “${m.word}” (${m.how})` },
       { name: channel.isVoiceBased?.() ? "Full sentence" : "Deleted message", value: transcript.slice(0, 1000) || "—" },
+      ...(confidence === null ? [] : [{ name: "Voice confidence", value: `${Math.round(confidence * 100)}%`, inline: true }]),
       { name: "Why", value: d.reason, inline: true },
       { name: "Duration", value: d.duration ? `${Math.round(d.duration / 60)} min` : "—", inline: true },
       { name: "Result", value: result, inline: true },
