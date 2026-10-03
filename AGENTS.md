@@ -14,6 +14,7 @@
 - Bot talks to the app only via `/api/public/bot/$action` authenticated by `x-bot-key` (stored in `bot_settings.bot_api_key`). Why: no service keys leave the backend.
 - Punishment decisions are made server-side in `src/lib/punish.ts`; the bot only executes them. Why: one source of truth for the ladder.
 - `src/lib/matcher.ts` is the single slang matcher; the bot's `matcher.js` is generated from it with `bun build --format=cjs`. Why: dashboard test box behaves exactly like the bot.
+- Deepgram recognition hints are safe server terms only; slang detection happens after transcription and voice punishments require per-word confidence. Why: slang hints bias speech recognition and cause false punishments.
 - Single-row `bot_settings` (id=1); first signed-up user becomes admin via trigger; all tables admin-only via `has_role`.
 - `supabase/setup.sql` is the full self-host schema + seed (concatenated drizzle migrations + slang seed); keep it in sync when the schema changes. Why: user moves the DB to their own Supabase.
 - `netlify.toml` builds with `NITRO_PRESET=netlify` for self-hosting; Lovable hosting ignores it. Why: user deploys to Netlify.

@@ -30,6 +30,8 @@ for each row execute function public.handle_first_admin();
 create table public.bot_settings (
   id int primary key default 1 check (id = 1),
   voice_channel_ids text[] not null default '{}',
+  text_channel_ids text[] not null default '{}',
+  text_all_channels boolean not null default false,
   log_channel_id text not null default '',
   alert_channel_id text not null default '',
   alert_role_id text not null default '',
@@ -41,6 +43,11 @@ create table public.bot_settings (
   ladder jsonb not null default '[{"from":1,"action":"warn","duration":0},{"from":4,"action":"timeout","duration":600},{"from":6,"action":"timeout","duration":3600},{"from":8,"action":"ban","duration":0}]',
   category_weights jsonb not null default '{"mild":1,"abuse":2,"severe":3}',
   bot_api_key text not null default encode(extensions.gen_random_bytes(24),'hex'),
+  discord_token text not null default '',
+  deepgram_keys text[] not null default '{}',
+  server_words text[] not null default '{VC,Gangster MC}',
+  min_confidence real not null default 0.85 check (min_confidence between 0 and 1),
+  min_confidence_short real not null default 0.92 check (min_confidence_short between 0 and 1),
   bot_last_seen timestamptz,
   bot_status jsonb not null default '{}',
   updated_at timestamptz not null default now()
@@ -98,6 +105,17 @@ insert into public.slang_words (category, word, language) values
 ('abuse','bhosadike','hindi'),('abuse','bhosdi ke','hindi'),('abuse','bhosdiwale','hindi'),('abuse','bhenchod','hindi'),('abuse','bahenchod','hindi'),('abuse','madharchod','hindi'),('abuse','lodu','hindi'),('abuse','chod','hindi'),('abuse','gaand','hindi'),('abuse','randwa','hindi'),
 ('mild','chutiye','hindi'),('mild','haramzada','hindi'),('mild','kamine','hindi'),('mild','kutiya','hindi'),('mild','suar','hindi'),
 ('provoking','bahar mil','hindi'),('provoking','teri aukat','hindi'),('provoking','aukat dikha','hindi')
+on conflict (category, word) do nothing;
+
+insert into public.slang_words(category,word,language) values
+('allow','cutie','english'),
+('allow','cute','english'),
+('allow','vc','english'),
+('allow','gangster mc','english'),
+('allow','gangstar mc','english'),
+('allow','to','english'),
+('allow','toh','hindi'),
+('allow','tt','english')
 on conflict (category, word) do nothing;
 insert into public.slang_words(category,word,language) values
 ('abuse','arsehole','english'),
