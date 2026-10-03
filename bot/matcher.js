@@ -216,7 +216,7 @@ function lev(a, b, max) {
   return prev[b.length];
 }
 function tokenMatch(heard, target, fuzzy) {
-  if (heard === target || squash(heard) === squash(target))
+  if (heard === target)
     return "exact";
   if (target.length <= 3)
     return null;
@@ -233,7 +233,7 @@ function tokenMatch(heard, target, fuzzy) {
   return null;
 }
 function exactToken(heard, target) {
-  return heard === target || squash(heard) === squash(target);
+  return heard === target;
 }
 function compile(words, serverWords = []) {
   const entries = [];
