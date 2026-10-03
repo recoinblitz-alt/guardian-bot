@@ -3,7 +3,7 @@ services:
     name: voiceguard
     runtime: node
     plan: starter # free plan sleeps after 15 min and the bot would disconnect
-    buildCommand: npm install && npm install --prefix bot && NITRO_PRESET=node_server npm run build
+    buildCommand: bun install && bun install --cwd bot && NITRO_PRESET=node_server bun run build
     startCommand: node start-all.mjs
     healthCheckPath: /auth
     envVars:
