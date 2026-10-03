@@ -55,43 +55,14 @@ class DeepgramManager {
     this.usage = this.loadUsage();
 
     // ---------------------------------------------------------
-    // IMPORTANT
+    // RECOGNITION HINTS
     // ---------------------------------------------------------
-    // We DO NOT send your complete 100+ moderation dictionary
-    // to Deepgram.
-    //
-    // Your complete dictionary stays in keywords.json and is
-    // checked locally after transcription.
-    //
-    // These are only recognition hints.
+    // Slang words are NEVER sent as hints: hinting slang makes
+    // Deepgram "hear" slang in normal speech (VC -> BC).
+    // Only safe server words (VC, server name, nicknames) from
+    // the panel are sent, so those are heard correctly.
     // ---------------------------------------------------------
-    this.keyterms = [
-      "gandu",
-      "gaandu",
-      "chutiya",
-      "chutiye",
-      "chutia",
-      "madarchod",
-      "maderchod",
-      "madarchodh",
-      "behenchod",
-      "bhenchod",
-      "bhosdike",
-      "lavda",
-      "lavde",
-      "lauda",
-      "laude",
-      "lund",
-      "lodu",
-      "randi",
-      "harami",
-      "haramzada",
-      "bhadwa",
-      "ma ki chut",
-      "maa ki chut",
-      "ma ki choot",
-      "maa ki choot"
-    ];
+    this.keyterms = ["VC"];
 
     this.resetIfNewDay();
   }
@@ -524,19 +495,17 @@ class DeepgramManager {
             ) {
               onTranscript({
                 transcript,
-
-                isFinal:
-                  Boolean(
-                    message.is_final
-                  ),
-
-                speechFinal:
-                  Boolean(
-                    message.speech_final
-                  ),
-
-                raw:
-                  message
+                isFinal: Boolean(message.is_final),
+                speechFinal: Boolean(message.speech_final),
+                confidence: Number(alternative?.confidence ?? 0),
+                // per-word confidence lets the bot ignore words Deepgram wasn't sure about
+                words: (alternative?.words || []).map((w) => ({
+                  word: w.punctuated_word || w.word || "",
+                  confidence: Number(w.confidence ?? 0),
+                  start: Number(w.start ?? 0),
+                  end: Number(w.end ?? 0),
+                })),
+                raw: message
               });
             }
 
