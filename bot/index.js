@@ -143,7 +143,9 @@ function openDeepgram(member, channel, onText) {
     // Only safe server words are recognition hints. Sending slang here causes
     // Deepgram to hallucinate slang in ordinary speech (for example VC -> BC).
     keyterms: config.settings.server_words || [],
-    onTranscript: (r) => r.isFinal && r.transcript && onText(r),
+    // Wait for Deepgram's end-of-speech decision. Acting on intermediate final
+    // segments makes background sounds much more likely to become a fake word.
+    onTranscript: (r) => r.isFinal && r.speechFinal && r.transcript && onText(r),
     onError: (err) => {
       const msg = String(err?.message || err);
       if (/401|402|403|insufficient|credit|balance|unauthori/i.test(msg)) {
@@ -159,8 +161,9 @@ function openDeepgram(member, channel, onText) {
 //  * silent frames are never sent (Deepgram bills per second of audio sent)
 //  * Deepgram is only opened after ~0.35 s of real speech, so coughs, clicks,
 //    keyboard noise and breathing never open a stream at all
-const VAD_RMS = Number(process.env.VAD_THRESHOLD) || 900; // raise if noise still gets sent
-const MIN_SPEECH_MS = Number(process.env.MIN_SPEECH_MS) || 350;
+const VAD_RMS = Number(process.env.VAD_THRESHOLD) || 1100; // background-noise floor
+const MIN_SPEECH_MS = Number(process.env.MIN_SPEECH_MS) || 500;
+const NOISE_MULTIPLIER = Number(process.env.NOISE_MULTIPLIER) || 2.4;
 const HANGOVER_FRAMES = 15; // keep ~300 ms after a word so endings aren't cut
 
 function toMono16k(pcm) {
@@ -191,6 +194,7 @@ function listen(conn, member, channel) {
   let preroll = [];   // voiced frames held until we know it's real speech
   let voicedMs = 0;
   let hang = 0;
+  let noiseFloor = 250;
 
   const cleanup = () => {
     if (!listening.has(member.id)) return;
@@ -210,7 +214,11 @@ function listen(conn, member, channel) {
   opus.on("end", () => setTimeout(cleanup, dg ? 1500 : 0));
   opus.pipe(decoder).on("data", (pcm) => {
     const { out, rms } = toMono16k(pcm);
-    const voiced = rms >= VAD_RMS;
+    const threshold = Math.max(VAD_RMS, noiseFloor * NOISE_MULTIPLIER);
+    const voiced = rms >= threshold;
+    // Learn stationary room/fan noise only while it is below the speech gate.
+    // This lets the threshold adapt without treating normal speech as noise.
+    if (!voiced) noiseFloor = noiseFloor * 0.97 + rms * 0.03;
     if (voiced) hang = HANGOVER_FRAMES; else if (hang > 0) hang--;
     if (!voiced && hang === 0) return; // silence: send nothing
 
@@ -230,6 +238,16 @@ function listen(conn, member, channel) {
 }
 
 // ---------------------------------------------------------------- moderation
+function stripDiscordMarkup(text) {
+  return String(text || "")
+    .replace(/<a?:[^:>]+:\d+>/g, " ") // custom emoji names are metadata, not written words
+    .replace(/<[@#][!&]?\d+>/g, " ") // user, role and channel mentions
+    .replace(/https?:\/\/\S+|www\.\S+/gi, " ") // links
+    .replace(/`{1,3}[\s\S]*?`{1,3}/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function voiceConfidence(match, speech) {
   const words = Array.isArray(speech?.words) ? speech.words : [];
   if (!words.length) return { confidence: Number(speech?.confidence || 0), duration: 0 };
@@ -263,7 +281,9 @@ function warningText(member, channel, transcript, m, d, message) {
 }
 
 async function moderate(member, channel, transcript, message = null, speech = null) {
-  const matches = findMatches(transcript, compiled, config.settings.fuzzy_matching);
+  const checkedText = message ? stripDiscordMarkup(transcript) : transcript;
+  if (!checkedText) return;
+  const matches = findMatches(checkedText, compiled, config.settings.fuzzy_matching);
   if (!matches.length) return;
   const m = matches[0];
   let confidence = null;
@@ -278,15 +298,15 @@ async function moderate(member, channel, transcript, message = null, speech = nu
       console.log(`🟡 Ignored tiny voice clip: "${transcript}" → ${m.word}`);
       return;
     }
-    // Exact keyword matches go directly through the ladder. Only uncertain
-    // sound-alike/fuzzy matches enter moderator review.
-    if (m.how !== "exact" && confidence < required) {
-      if (confidence >= reviewMinimum) await requestReview(member, channel, m, transcript, confidence);
-      else console.log(`🟡 Ignored uncertain voice catch: "${transcript}" → ${m.word} (${Math.round(confidence * 100)}%)`);
+    // A sound-alike/fuzzy result is never punished automatically. If Deepgram
+    // is reasonably sure what it heard, a moderator decides; otherwise ignore it.
+    if (m.how !== "exact") {
+      if (confidence >= reviewMinimum) await requestReview(member, channel, m, checkedText, confidence);
+      else console.log(`🟡 Ignored uncertain voice catch: "${checkedText}" → ${m.word} (${Math.round(confidence * 100)}%)`);
       return;
     }
-    if (!Number.isFinite(confidence)) {
-      console.log(`🟡 Ignored uncertain voice catch: "${transcript}" → ${m.word} (${Math.round(confidence * 100)}%, need ${Math.round(required * 100)}%)`);
+    if (!Number.isFinite(confidence) || confidence < required) {
+      console.log(`🟡 Ignored low-confidence exact voice catch: "${checkedText}" → ${m.word} (${Math.round(confidence * 100)}%, need ${Math.round(required * 100)}%)`);
       return;
     }
   }
@@ -300,7 +320,7 @@ async function moderate(member, channel, transcript, message = null, speech = nu
   try {
     d = await api("offense", {
       method: "POST",
-      body: { discord_user_id: member.id, username: member.user.tag, channel_name: (message ? "#" : "") + channel.name, category: m.category, matched: m.heard, transcript },
+      body: { discord_user_id: member.id, username: member.user.tag, channel_name: (message ? "#" : "") + channel.name, category: m.category, matched: m.heard, transcript: checkedText },
     });
   } catch (e) {
     return console.error("⚠️", e.message);
@@ -309,7 +329,7 @@ async function moderate(member, channel, transcript, message = null, speech = nu
   const reason = `VoiceGuard: ${d.reason} — said "${m.heard}"`;
   let result = "done";
   try {
-    const notice = warningText(member, channel, transcript, m, d, message);
+    const notice = warningText(member, channel, checkedText, m, d, message);
     await member.send(notice).catch(() => {});
     if (message) {
       const sent = await channel.send(`⚠️ <@${member.id}>, your message was removed for saying **${m.heard}** (matched **${m.word}**).`).catch(() => null);
@@ -321,8 +341,8 @@ async function moderate(member, channel, transcript, message = null, speech = nu
     result = `failed: ${e.message}`;
   }
 
-  if (d.action === "alert") await alert(member, channel, m, transcript);
-  await log(member, channel, m, transcript, d, result, confidence);
+  if (d.action === "alert") await alert(member, channel, m, checkedText);
+  await log(member, channel, m, checkedText, d, result, confidence);
 }
 
 async function requestReview(member, channel, m, transcript, confidence) {

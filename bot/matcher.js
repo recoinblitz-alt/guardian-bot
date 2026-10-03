@@ -216,9 +216,11 @@ function lev(a, b, max) {
   return prev[b.length];
 }
 function tokenMatch(heard, target, fuzzy) {
-  if (heard === target || squash(heard) === squash(target))
+  if (heard === target)
     return "exact";
   if (target.length <= 3)
+    return null;
+  if (heard.startsWith("chh") !== target.startsWith("chh") && (heard.startsWith("ch") || target.startsWith("ch")))
     return null;
   const ph = phonetic(heard), pt = phonetic(target);
   const short = pt.length <= 4;
@@ -229,6 +231,9 @@ function tokenMatch(heard, target, fuzzy) {
   if (pt.length >= 8 && ph.slice(0, 3) === pt.slice(0, 3) && lev(ph, pt, 1) <= 1)
     return "fuzzy";
   return null;
+}
+function exactToken(heard, target) {
+  return heard === target;
 }
 function compile(words, serverWords = []) {
   const entries = [];
@@ -314,6 +319,19 @@ function findMatches(transcript, list, fuzzy = true) {
   const found = [];
   const seen = new Set;
   for (const e of list.entries) {
+    if (e.category === "sexual") {
+      for (let start = 0;start + e.tokens.length <= tokens.length; start++) {
+        if (e.tokens.some((target, offset) => blocked[start + offset] || !exactToken(tokens[start + offset], target)))
+          continue;
+        const key = `${e.category}|${e.word}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          found.push({ category: e.category, word: e.word, heard: tokens.slice(start, start + e.tokens.length).join(" "), how: "exact" });
+        }
+        break;
+      }
+      continue;
+    }
     for (let start = 0;start < tokens.length; start++) {
       if (blocked[start])
         continue;

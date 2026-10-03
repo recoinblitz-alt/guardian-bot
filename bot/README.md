@@ -23,10 +23,11 @@ On Railway/Render: create a "worker"/background service from this folder, add th
 ## How it works
 - Every minute it reloads settings and word lists from the panel. Change things in the panel, no restart needed.
 - Every 15 s it checks it's in all assigned voice channels and rejoins if kicked/disconnected.
-- Each person's speech goes to Deepgram (multilingual). The text is checked by `matcher.js`; low-confidence words and tiny one-word noise clips are ignored before punishment.
+- Each person's speech goes to Deepgram (multilingual). The text is checked by `matcher.js`; background noise, low-confidence words and tiny one-word noise clips are ignored before punishment.
 - The panel decides the punishment using your points ladder; the bot carries it out and posts an embed in the log channel.
 - Provoking → tags your chosen role in the alert channel.
-- Uncertain voice sound-alikes are sent to the alert channel for 10 minutes with Warn, Timeout 10m, Ban, and Ignore buttons. Exact keywords and confident matches still follow the ladder automatically.
+- Voice sound-alikes and fuzzy matches are never automatic. They are sent to the alert channel for 10 minutes with Warn, Timeout 10m, Ban, and Ignore buttons when confidence is usable; weaker catches are ignored. Exact keywords still require the configured confidence before following the ladder automatically.
+- Sexual terms match only exact normalized words or exact consecutive phrases. Text moderation ignores Discord emoji names, mentions, channel tags, code, and links.
 
 Slash commands (moderators only): /warnings /clearwarnings /addword /removeword /join /leave /status
 
@@ -37,8 +38,9 @@ The bot now only sends real speech: silence, coughs, clicks and keyboard noise a
 before anything reaches Deepgram, and audio is shrunk to 16 kHz mono.
 Optional `.env` tuning:
 ```
-VAD_THRESHOLD=900        # raise (e.g. 1100) if background noise still gets sent, lower if quiet voices are missed
-MIN_SPEECH_MS=350        # how much speech before Deepgram is opened
+VAD_THRESHOLD=1100       # raise (e.g. 1400) if background noise still gets sent, lower if quiet voices are missed
+MIN_SPEECH_MS=500        # sustained speech required before Deepgram is opened
+NOISE_MULTIPLIER=2.4     # adaptive room-noise gate; raise slightly for loud fans/music
 DEEPGRAM_LANGUAGE=multi  # multi = Hindi+English mix. Use "hi" for mostly Hindi/Punjabi speakers.
 ```
 Safe server terms such as `VC` and your server name are managed on the panel's Channels page. Slang is intentionally never sent as a recognition hint because that makes normal speech sound abusive.
