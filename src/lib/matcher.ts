@@ -120,7 +120,7 @@ function lev(a: string, b: string, max: number): number {
 }
 
 function tokenMatch(heard: string, target: string, fuzzy: boolean): Match["how"] | null {
-  if (heard === target || squash(heard) === squash(target)) return "exact";
+  if (heard === target) return "exact";
   if (target.length <= 3) return null; // short words like bc / mc must be exact
   // Hindi छ / "chh" is a different sound from च / "ch". In particular,
   // "chhod/chhodo" (leave/release) must never match the abusive "chod".
@@ -138,7 +138,7 @@ function tokenMatch(heard: string, target: string, fuzzy: boolean): Match["how"]
 }
 
 function exactToken(heard: string, target: string): boolean {
-  return heard === target || squash(heard) === squash(target);
+  return heard === target;
 }
 
 export interface CompiledList {
