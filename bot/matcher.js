@@ -230,6 +230,9 @@ function tokenMatch(heard, target, fuzzy) {
     return "fuzzy";
   return null;
 }
+function exactToken(heard, target) {
+  return heard === target || squash(heard) === squash(target);
+}
 function compile(words, serverWords = []) {
   const entries = [];
   const allow = new Set;
@@ -314,6 +317,19 @@ function findMatches(transcript, list, fuzzy = true) {
   const found = [];
   const seen = new Set;
   for (const e of list.entries) {
+    if (e.category === "sexual") {
+      for (let start = 0;start + e.tokens.length <= tokens.length; start++) {
+        if (e.tokens.some((target, offset) => blocked[start + offset] || !exactToken(tokens[start + offset], target)))
+          continue;
+        const key = `${e.category}|${e.word}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          found.push({ category: e.category, word: e.word, heard: tokens.slice(start, start + e.tokens.length).join(" "), how: "exact" });
+        }
+        break;
+      }
+      continue;
+    }
     for (let start = 0;start < tokens.length; start++) {
       if (blocked[start])
         continue;
