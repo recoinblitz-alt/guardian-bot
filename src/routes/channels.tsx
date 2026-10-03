@@ -29,9 +29,9 @@ const toList = (s: string) => s.split(/[\s,]+/).map((x) => x.trim()).filter((x) 
 
 function Channels() {
   const { data, save } = useSettings();
-  const [f, setF] = useState<Partial<Settings> & { vc: string; tc: string; iu: string; ir: string }>({ vc: "", tc: "", iu: "", ir: "" });
+  const [f, setF] = useState<Partial<Settings> & { vc: string; tc: string; iu: string; ir: string; sw: string }>({ vc: "", tc: "", iu: "", ir: "", sw: "" });
   useEffect(() => {
-    if (data) setF({ ...data, vc: data.voice_channel_ids.join("\n"), tc: (data.text_channel_ids ?? []).join("\n"), iu: data.ignored_user_ids.join("\n"), ir: data.ignored_role_ids.join("\n") });
+    if (data) setF({ ...data, vc: data.voice_channel_ids.join("\n"), tc: (data.text_channel_ids ?? []).join("\n"), iu: data.ignored_user_ids.join("\n"), ir: data.ignored_role_ids.join("\n"), sw: (data.server_words ?? []).join("\n") });
   }, [data]);
   if (!data) return null;
 
@@ -45,6 +45,7 @@ function Channels() {
           text_all_channels: !!f.text_all_channels,
           ignored_user_ids: toList(f.iu),
           ignored_role_ids: toList(f.ir),
+          server_words: [...new Set(f.sw.split("\n").map((x) => x.trim()).filter(Boolean))].slice(0, 50),
           log_channel_id: (f.log_channel_id ?? "").trim(),
           alert_channel_id: (f.alert_channel_id ?? "").trim(),
           alert_role_id: (f.alert_role_id ?? "").trim(),
@@ -63,6 +64,12 @@ function Channels() {
           Watch every text channel in the server
         </label>
         <Textarea rows={3} className="font-mono" disabled={!!f.text_all_channels} value={f.tc} onChange={(e) => setF({ ...f, tc: e.target.value })} />
+      </Panel>
+      <Panel
+        title="Server words"
+        desc="Words your members say a lot — VC, your server name, nicknames, game names. One per line. The bot listens for these so it hears them correctly, and they are never punished."
+      >
+        <Textarea rows={4} className="font-mono" placeholder={"VC\nGangster MC"} value={f.sw} onChange={(e) => setF({ ...f, sw: e.target.value })} />
       </Panel>
       <Panel title="Reporting">
         <div className="grid gap-4 sm:grid-cols-3">

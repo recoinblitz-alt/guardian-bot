@@ -32,8 +32,8 @@ const offenseSchema = z.object({
   username: z.string().max(100).default(""),
   channel_name: z.string().max(100).default(""),
   category: z.enum(["mild", "abuse", "severe", "sexual", "provoking"]),
-  matched: z.string().max(200).default(""),
-  transcript: z.string().max(1000).default(""),
+  matched: z.string().max(200).transform((s) => s.slice(0, 200)).default(""),
+  transcript: z.string().transform((s) => s.slice(0, 1000)).default(""),
 });
 
 async function handle(request: Request, action: string) {

@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Shell, Panel } from "@/components/Shell";
-import { CATEGORY_LABEL } from "@/lib/settings";
+import { CATEGORY_LABEL, useSettings } from "@/lib/settings";
 import { compile, findMatches, type WordEntry } from "@/lib/matcher";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,8 +41,9 @@ function Words() {
   const [cat, setCat] = useState<string>("abuse");
   const [input, setInput] = useState("");
   const [test, setTest] = useState("");
-  const compiled = useMemo(() => compile(words as WordEntry[]), [words]);
-  const results = test.trim() ? findMatches(test, compiled) : [];
+  const { data: settings } = useSettings();
+  const compiled = useMemo(() => compile(words as WordEntry[], settings?.server_words ?? []), [words, settings?.server_words]);
+  const results = test.trim() ? findMatches(test, compiled, settings?.fuzzy_matching ?? true) : [];
 
   const add = async () => {
     const list = input.split(/[\n,]+/).map((w) => w.trim().toLowerCase()).filter(Boolean).slice(0, 200);
