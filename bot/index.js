@@ -250,9 +250,11 @@ function nextText(next) {
 
 function warningText(member, channel, transcript, m, d, message) {
   const place = message ? `#${channel.name}` : `voice channel ${channel.name}`;
+  const escaped = m.heard.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const marked = escaped ? transcript.replace(new RegExp(escaped, "i"), (word) => `**${word}**`) : transcript;
   return [
     `⚠️ **VoiceGuard — ${member.guild.name}**`,
-    `You said: “${transcript.slice(0, 700)}”`,
+    `You said: “${marked.slice(0, 700)}”`,
     `Caught: **${m.heard}** → matched **${m.word}** (${m.category})`,
     `Where: ${place}`,
     `Points now: **${d.total}**. ${nextText(d.next)}`,
@@ -268,7 +270,7 @@ async function moderate(member, channel, transcript, message = null, speech = nu
     const voice = voiceConfidence(m, speech);
     confidence = voice.confidence;
     const short = normalize(m.word).join("").length <= 4;
-    const required = Number(short ? config.settings.min_confidence_short : config.settings.min_confidence);
+    const required = Number(short ? (config.settings.min_confidence_short ?? 0.92) : (config.settings.min_confidence ?? 0.85));
     // Very short, one-word clips are commonly noise. Never punish them.
     if ((Array.isArray(speech?.words) && speech.words.length === 1 && voice.duration < 0.4) || confidence < required) {
       console.log(`🟡 Ignored uncertain voice catch: "${transcript}" → ${m.word} (${Math.round(confidence * 100)}%, need ${Math.round(required * 100)}%)`);
