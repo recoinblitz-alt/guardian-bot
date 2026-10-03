@@ -5,7 +5,7 @@ require("dotenv").config();
 
 const {
   Client, GatewayIntentBits, EmbedBuilder, PermissionFlagsBits,
-  SlashCommandBuilder, ChannelType,
+  SlashCommandBuilder, ChannelType, ActionRowBuilder, ButtonBuilder, ButtonStyle,
 } = require("discord.js");
 const {
   joinVoiceChannel, getVoiceConnection, EndBehaviorType, VoiceConnectionStatus, entersState,
@@ -29,6 +29,7 @@ let compiled = compile([]);
 let activeKeyId = null;
 const cooldown = new Map(); // userId -> timestamp
 const listening = new Map(); // userId -> cleanup fn
+const pendingReviews = new Map(); // reviewId -> uncertain voice match (10 minute lifetime)
 
 // ---------------------------------------------------------------- panel API
 async function api(path, { method = "GET", body } = {}) {
@@ -271,8 +272,20 @@ async function moderate(member, channel, transcript, message = null, speech = nu
     confidence = voice.confidence;
     const short = normalize(m.word).join("").length <= 4;
     const required = Number(short ? (config.settings.min_confidence_short ?? 0.92) : (config.settings.min_confidence ?? 0.85));
+    const reviewMinimum = short ? 0.8 : 0.7;
     // Very short, one-word clips are commonly noise. Never punish them.
-    if ((Array.isArray(speech?.words) && speech.words.length === 1 && voice.duration < 0.4) || confidence < required) {
+    if (Array.isArray(speech?.words) && speech.words.length === 1 && voice.duration < 0.4) {
+      console.log(`🟡 Ignored tiny voice clip: "${transcript}" → ${m.word}`);
+      return;
+    }
+    // Exact keyword matches go directly through the ladder. Only uncertain
+    // sound-alike/fuzzy matches enter moderator review.
+    if (m.how !== "exact" && confidence < required) {
+      if (confidence >= reviewMinimum) await requestReview(member, channel, m, transcript, confidence);
+      else console.log(`🟡 Ignored uncertain voice catch: "${transcript}" → ${m.word} (${Math.round(confidence * 100)}%)`);
+      return;
+    }
+    if (!Number.isFinite(confidence)) {
       console.log(`🟡 Ignored uncertain voice catch: "${transcript}" → ${m.word} (${Math.round(confidence * 100)}%, need ${Math.round(required * 100)}%)`);
       return;
     }
@@ -310,6 +323,67 @@ async function moderate(member, channel, transcript, message = null, speech = nu
 
   if (d.action === "alert") await alert(member, channel, m, transcript);
   await log(member, channel, m, transcript, d, result, confidence);
+}
+
+async function requestReview(member, channel, m, transcript, confidence) {
+  const { alert_channel_id, alert_role_id } = config.settings;
+  const ch = alert_channel_id && (await client.channels.fetch(alert_channel_id).catch(() => null));
+  if (!ch?.isTextBased()) return;
+  const id = Math.random().toString(36).slice(2, 12);
+  const expiresAt = Date.now() + 10 * 60_000;
+  pendingReviews.set(id, { member, channel, m, transcript, confidence, expiresAt });
+  setTimeout(() => pendingReviews.delete(id), 10 * 60_000);
+  const embed = new EmbedBuilder()
+    .setColor(0xffc53d)
+    .setTitle(`REVIEW NEEDED — ${member.user.tag}`)
+    .setDescription("VoiceGuard is not certain enough to punish automatically.")
+    .addFields(
+      { name: "User", value: `<@${member.id}> (${member.id})`, inline: true },
+      { name: "Voice channel", value: channel.name, inline: true },
+      { name: "Confidence", value: `${Math.round(confidence * 100)}%`, inline: true },
+      { name: "Heard", value: `“${m.heard}” → matched “${m.word}” (${m.how})` },
+      { name: "Full sentence", value: transcript.slice(0, 1000) || "—" },
+      { name: "Expires", value: `<t:${Math.floor(expiresAt / 1000)}:R>` },
+    )
+    .setTimestamp();
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`vg:${id}:warn`).setLabel("Warn").setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(`vg:${id}:timeout`).setLabel("Timeout 10m").setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId(`vg:${id}:ban`).setLabel("Ban").setStyle(ButtonStyle.Danger),
+    new ButtonBuilder().setCustomId(`vg:${id}:ignore`).setLabel("Ignore").setStyle(ButtonStyle.Secondary),
+  );
+  await ch.send({
+    content: alert_role_id ? `<@&${alert_role_id}> uncertain voice match` : "Uncertain voice match",
+    embeds: [embed], components: [row],
+    allowedMentions: { roles: alert_role_id ? [alert_role_id] : [], users: [] },
+  }).catch((e) => console.error("⚠️ review alert:", e.message));
+}
+
+async function resolveReview(interaction, review, action) {
+  const duration = action === "timeout" ? 600 : 0;
+  const d = await api("review-offense", {
+    method: "POST",
+    body: {
+      discord_user_id: review.member.id,
+      username: review.member.user.tag,
+      channel_name: review.channel.name,
+      category: review.m.category,
+      matched: review.m.heard,
+      transcript: review.transcript,
+      action,
+      duration_seconds: duration,
+    },
+  });
+  const reason = `VoiceGuard moderator review: said "${review.m.heard}"`;
+  let result = `approved by ${interaction.user.tag}`;
+  try {
+    await review.member.send(warningText(review.member, review.channel, review.transcript, review.m, d, null)).catch(() => {});
+    if (action === "timeout") await review.member.timeout(duration * 1000, reason);
+    else if (action === "ban") await review.member.ban({ reason, deleteMessageSeconds: 0 });
+  } catch (e) {
+    result = `failed: ${e.message}`;
+  }
+  await log(review.member, review.channel, review.m, review.transcript, d, result, review.confidence);
 }
 
 async function log(member, channel, m, transcript, d, result, confidence = null) {
@@ -388,6 +462,28 @@ const commands = [
 ].map((c) => c.setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers).toJSON());
 
 client.on("interactionCreate", async (i) => {
+  if (i.isButton() && i.customId.startsWith("vg:")) {
+    const [, id, action] = i.customId.split(":");
+    const review = pendingReviews.get(id);
+    const canModerate = i.memberPermissions?.has(PermissionFlagsBits.ModerateMembers) ||
+      (config?.settings.alert_role_id && i.member?.roles?.cache?.has(config.settings.alert_role_id));
+    if (!canModerate) return i.reply({ content: "You need the moderator role to decide this.", ephemeral: true });
+    if (!review || review.expiresAt <= Date.now()) {
+      pendingReviews.delete(id);
+      return i.update({ content: "This review expired.", components: [] });
+    }
+    pendingReviews.delete(id);
+    if (action === "ignore") return i.update({ content: `Ignored by ${i.user}. No punishment was recorded.`, components: [] });
+    if (!["warn", "timeout", "ban"].includes(action)) return i.reply({ content: "Unknown review action.", ephemeral: true });
+    await i.deferUpdate();
+    try {
+      await resolveReview(i, review, action);
+      return i.editReply({ content: `${action.toUpperCase()} approved by ${i.user}.`, components: [] });
+    } catch (e) {
+      pendingReviews.set(id, review);
+      return i.editReply({ content: `Could not apply punishment: ${e.message}`, components: [] });
+    }
+  }
   if (!i.isChatInputCommand()) return;
   await i.deferReply({ ephemeral: true });
   try {
