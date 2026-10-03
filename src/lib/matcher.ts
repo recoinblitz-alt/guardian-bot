@@ -93,6 +93,8 @@ function squash(w: string): string {
 export function phonetic(w: string, foldEnding = true): string {
   let s = squash(w);
   s = s.replace(/ph/g, "f").replace(/ck/g, "k").replace(/q/g, "k").replace(/z/g, "j").replace(/w/g, "v");
+  // a lone "c" sounds like "k" (cutie, cute) — only "ch" is the Hindi च sound (chutiya)
+  s = s.replace(/c(?!h)/g, "k");
   s = s.replace(/ee/g, "i").replace(/oo/g, "u").replace(/y/g, "i");
   s = s.replace(/([bcdgjkpt])h/g, "$1"); // bh->b, kh->k, ch->c
   s = s.replace(/sh/g, "s");
@@ -133,25 +135,63 @@ function tokenMatch(heard: string, target: string, fuzzy: boolean): Match["how"]
 
 export interface CompiledList {
   entries: { category: Category; word: string; tokens: string[] }[];
+  /** single safe words — never punished anywhere */
   allow: Set<string>;
+  /** safe multi-word phrases — protect only that whole phrase (e.g. "gangster mc") */
+  phrases: string[][];
 }
 
-export function compile(words: WordEntry[]): CompiledList {
+/**
+ * Build the list. `serverWords` (VC, server name, nicknames…) are always safe.
+ * Multi-word allow entries are phrases: "gangster mc" protects "gangster mc", never "mc" alone.
+ */
+export function compile(words: WordEntry[], serverWords: string[] = []): CompiledList {
   const entries: CompiledList["entries"] = [];
   const allow = new Set<string>();
+  const phrases: string[][] = [];
+  const addSafe = (text: string) => {
+    const tokens = normalize(text).map(squash);
+    if (tokens.length === 1) allow.add(tokens[0]!);
+    else if (tokens.length > 1) phrases.push(tokens);
+  };
   for (const w of words) {
+    if (w.category === "allow") { addSafe(w.word); continue; }
     const tokens = normalize(w.word);
     if (!tokens.length) continue;
-    if (w.category === "allow") { tokens.forEach((t) => allow.add(squash(t))); continue; }
     entries.push({ category: w.category, word: w.word, tokens });
   }
-  return { entries, allow };
+  serverWords.forEach(addSafe);
+  return { entries, allow, phrases };
+}
+
+// Speech-to-text often writes "VC" (voice chat) as "BC" and "MC" in server names.
+// A lone bc / mc / vc next to these words is about the voice channel, not abuse.
+const VC_CONTEXT = new Set([
+  "join", "joined", "joining", "aa", "aaja", "aajao", "aao", "ao", "mein", "me", "mai", "main", "in", "chal", "chalo",
+  "leave", "left", "wale", "wala", "wali", "se", "pe", "par", "on", "off", "call", "voice", "channel", "chat", "server",
+  "gangster", "gangstar", "gangsters",
+]);
+const VC_LIKE = new Set(["bc", "mc", "vc", "bsi", "vsi"]);
+
+function blockedTokens(tokens: string[], list: CompiledList): boolean[] {
+  const sq = tokens.map(squash);
+  const blocked = sq.map((t) => list.allow.has(t));
+  for (const p of list.phrases) {
+    for (let i = 0; i + p.length <= sq.length; i++) {
+      if (p.every((t, k) => sq[i + k] === t)) for (let k = 0; k < p.length; k++) blocked[i + k] = true;
+    }
+  }
+  for (let i = 0; i < tokens.length; i++) {
+    if (!VC_LIKE.has(tokens[i]!)) continue;
+    if (VC_CONTEXT.has(tokens[i - 1] ?? "") || VC_CONTEXT.has(tokens[i + 1] ?? "")) blocked[i] = true;
+  }
+  return blocked;
 }
 
 /** Find every slang match in a transcript. Phrases may have up to 2 filler words between their parts. */
 export function findMatches(transcript: string, list: CompiledList, fuzzy = true): Match[] {
   const tokens = normalize(transcript);
-  const blocked = tokens.map((t) => list.allow.has(squash(t)));
+  const blocked = blockedTokens(tokens, list);
   const found: Match[] = [];
   const seen = new Set<string>();
   for (const e of list.entries) {
@@ -159,11 +199,10 @@ export function findMatches(transcript: string, list: CompiledList, fuzzy = true
       if (blocked[start]) continue;
       let first = tokenMatch(tokens[start]!, e.tokens[0]!, fuzzy);
       let pos = start;
-      // split compounds: "behen chod" should match "behenchod"
-      if (!first && e.tokens.length === 1 && start + 1 < tokens.length && !blocked[start + 1]) {
-        first = tokenMatch(tokens[start]! + tokens[start + 1]!, e.tokens[0]!, false);
-        if (first === "fuzzy") first = null;
-        if (first) pos = start + 1;
+      // split compounds: "behen chod" should match "behenchod" — exact only, long words only
+      if (!first && e.tokens.length === 1 && e.tokens[0]!.length >= 5 && start + 1 < tokens.length && !blocked[start + 1]) {
+        const joined = tokens[start]! + tokens[start + 1]!;
+        if (joined === e.tokens[0] || squash(joined) === squash(e.tokens[0]!)) { first = "exact"; pos = start + 1; }
       }
       if (!first) continue;
       let how: Match["how"] = first, ok = true;
