@@ -29,3 +29,13 @@
 
 ## 3. Add bot credentials
 Open the deployed panel and add the Discord bot token and all Deepgram keys on Overview. The combined service reads them from the panel and starts both the website and bot.
+
+## 4. Optional AI context check
+Open **Punishment rules**, enable **AI context check**, and choose one provider format:
+
+- **OpenAI-compatible** for OpenAI, OpenRouter, Groq, Together, or another service exposing `/chat/completions`.
+- **Anthropic Claude** for the native Claude Messages API.
+
+Enter the provider's base URL, exact model name, and API key, then select **Save & test connection**. Only sentences that already match a configured word are sent to the provider. Safe sentences are ignored; uncertain answers and provider failures go to the moderator review channel.
+
+For an existing database, run `drizzle/migrations/0005_ai_context_check.sql` once before enabling the setting.

@@ -41,6 +41,79 @@ const reviewOffenseSchema = offenseSchema.extend({
   duration_seconds: z.number().int().min(0).max(2419200),
 });
 
+const aiCheckSchema = z.object({
+  transcript: z.string().min(1).max(1000),
+  matched: z.string().min(1).max(200),
+  keyword: z.string().min(1).max(200),
+  category: z.enum(["mild", "abuse", "severe", "sexual", "provoking"]),
+  source: z.enum(["voice", "text"]),
+  test: z.boolean().optional(),
+});
+
+type AiVerdict = "violation" | "safe" | "uncertain";
+
+function providerUrl(base: string, provider: string) {
+  const fallback = provider === "anthropic" ? "https://api.anthropic.com" : "https://api.openai.com/v1";
+  const url = new URL((base || fallback).trim());
+  if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) throw new Error("Invalid AI base URL");
+  const path = url.pathname.replace(/\/$/, "");
+  if (provider === "anthropic") {
+    if (!path.endsWith("/messages")) url.pathname = `${path.endsWith("/v1") ? path : `${path}/v1`}/messages`;
+  } else if (!path.endsWith("/chat/completions")) {
+    url.pathname = `${path}/chat/completions`;
+  }
+  return url.toString();
+}
+
+function parseAiVerdict(text: string): { verdict: AiVerdict; reason: string } {
+  const candidate = text.match(/\{[\s\S]*\}/)?.[0];
+  if (!candidate) return { verdict: "uncertain", reason: "AI returned an unreadable response." };
+  try {
+    const value = JSON.parse(candidate) as { verdict?: unknown; reason?: unknown };
+    if (value.verdict !== "violation" && value.verdict !== "safe" && value.verdict !== "uncertain") {
+      return { verdict: "uncertain", reason: "AI returned an invalid verdict." };
+    }
+    return { verdict: value.verdict, reason: String(value.reason || "No reason supplied.").slice(0, 300) };
+  } catch {
+    return { verdict: "uncertain", reason: "AI returned malformed JSON." };
+  }
+}
+
+async function judgeContext(settings: any, input: z.infer<typeof aiCheckSchema>) {
+  if (!settings.ai_enabled && !input.test) return { verdict: "violation" as const, reason: "AI context check is disabled.", skipped: true };
+  if (!settings.ai_api_key?.trim() || !settings.ai_model?.trim()) return { verdict: "uncertain" as const, reason: "AI provider is not fully configured." };
+  const provider = settings.ai_provider === "anthropic" ? "anthropic" : "openai_compatible";
+  const system = `You are a conservative multilingual Discord moderation context checker. A deterministic keyword matcher already found a possible violation. Read the entire sentence and decide its meaning. Quoting, discussing, translating, condemning, usernames, innocent homophones, and non-abusive uses are SAFE. Direct abuse, harassment, threats, or sexual harassment aimed at someone are VIOLATION. If context is incomplete or ambiguous, choose UNCERTAIN. Never decide a punishment. Return only JSON: {"verdict":"violation|safe|uncertain","reason":"brief reason"}.`;
+  const prompt = `Source: ${input.source}\nCategory: ${input.category}\nMatched text: ${input.matched}\nConfigured keyword: ${input.keyword}\nFull sentence: ${input.transcript}`;
+  try {
+    const url = providerUrl(settings.ai_base_url, provider);
+    const headers: Record<string, string> = { "content-type": "application/json" };
+    let body: Record<string, unknown>;
+    if (provider === "anthropic") {
+      headers["x-api-key"] = settings.ai_api_key.trim();
+      headers["anthropic-version"] = "2023-06-01";
+      body = { model: settings.ai_model.trim(), max_tokens: 180, system, messages: [{ role: "user", content: prompt }] };
+    } else {
+      headers["authorization"] = `Bearer ${settings.ai_api_key.trim()}`;
+      body = { model: settings.ai_model.trim(), messages: [{ role: "system", content: system }, { role: "user", content: prompt }] };
+    }
+    const response = await fetch(url, { method: "POST", headers, body: JSON.stringify(body) });
+    if (!response.ok) {
+      const detail = (await response.text()).slice(0, 180).replace(/\s+/g, " ");
+      return { verdict: "uncertain" as const, reason: `AI provider error ${response.status}${detail ? `: ${detail}` : ""}` };
+    }
+    const result = await response.json() as any;
+    const text = provider === "anthropic"
+      ? result?.content?.filter((x: any) => x?.type === "text").map((x: any) => x.text).join("")
+      : Array.isArray(result?.choices?.[0]?.message?.content)
+        ? result.choices[0].message.content.map((x: any) => x?.text || "").join("")
+        : result?.choices?.[0]?.message?.content;
+    return parseAiVerdict(String(text || ""));
+  } catch (error) {
+    return { verdict: "uncertain" as const, reason: `AI connection failed: ${String((error as Error)?.message || error).slice(0, 180)}` };
+  }
+}
+
 async function handle(request: Request, action: string) {
   const ctx = await authorize(request);
   if (!ctx) return json({ error: "Invalid bot key" }, 401);
@@ -50,7 +123,8 @@ async function handle(request: Request, action: string) {
   switch (action) {
     case "config": {
       const { data: words } = await db.from("slang_words").select("category, word");
-      const { bot_api_key: _k, discord_token: _t, deepgram_keys: dk, ...rest } = settings;
+      const { bot_api_key: _k, discord_token: _t, deepgram_keys: dk, ...rest } = settings as typeof settings & { ai_api_key?: string };
+      delete rest.ai_api_key;
       // fingerprint lets the bot notice credential changes without receiving them every minute
       const fp = `${_t.length}:${_t.slice(-6)}|${dk.map((k: string) => k.slice(-6)).join(",")}`;
       return json({ settings: rest, words: words ?? [], credentials_fp: fp });
@@ -68,6 +142,11 @@ async function handle(request: Request, action: string) {
         .update({ bot_last_seen: new Date().toISOString(), bot_status: body ?? {} })
         .eq("id", 1);
       return json({ ok: true });
+    }
+    case "ai-check": {
+      const parsed = aiCheckSchema.safeParse(await request.json().catch(() => null));
+      if (!parsed.success) return json({ error: parsed.error.flatten() }, 400);
+      return json(await judgeContext(settings, parsed.data));
     }
     case "offense": {
       const parsed = offenseSchema.safeParse(await request.json().catch(() => null));

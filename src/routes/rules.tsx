@@ -9,7 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Trash2 } from "lucide-react";
+import { Eye, EyeOff, Plus, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/rules")({
   head: () => ({
@@ -38,6 +39,13 @@ function Rules() {
   const [fuzzy, setFuzzy] = useState(true);
   const [conf, setConf] = useState(85);
   const [confShort, setConfShort] = useState(92);
+  const [aiEnabled, setAiEnabled] = useState(false);
+  const [aiProvider, setAiProvider] = useState<"openai_compatible" | "anthropic">("openai_compatible");
+  const [aiBaseUrl, setAiBaseUrl] = useState("");
+  const [aiModel, setAiModel] = useState("");
+  const [aiKey, setAiKey] = useState("");
+  const [showAiKey, setShowAiKey] = useState(false);
+  const [testingAi, setTestingAi] = useState(false);
 
   useEffect(() => {
     if (!data) return;
@@ -48,6 +56,11 @@ function Rules() {
     setFuzzy(data.fuzzy_matching);
     setConf(Math.round((data.min_confidence ?? 0.85) * 100));
     setConfShort(Math.round((data.min_confidence_short ?? 0.92) * 100));
+    setAiEnabled(data.ai_enabled ?? false);
+    setAiProvider(data.ai_provider ?? "openai_compatible");
+    setAiBaseUrl(data.ai_base_url ?? "");
+    setAiModel(data.ai_model ?? "");
+    setAiKey(data.ai_api_key ?? "");
   }, [data]);
   if (!data) return null;
 
@@ -122,6 +135,77 @@ function Rules() {
         </div>
       </Panel>
 
+      <Panel
+        title="AI context check"
+        desc="After a keyword matches, the AI reads the full sentence before any punishment. Safe context is ignored; uncertain results go to moderator review."
+      >
+        <div className="space-y-5">
+          <Row label="Check meaning before punishment" desc="Only matched sentences are sent to the selected AI provider." checked={aiEnabled} onChange={setAiEnabled} />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <Label>Provider format</Label>
+              <Select value={aiProvider} onValueChange={(v) => setAiProvider(v as typeof aiProvider)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="openai_compatible">OpenAI-compatible</SelectItem>
+                  <SelectItem value="anthropic">Anthropic Claude</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="ai-model">Model</Label>
+              <Input id="ai-model" value={aiModel} onChange={(e) => setAiModel(e.target.value)} placeholder={aiProvider === "anthropic" ? "claude-sonnet-4-5" : "gpt-4o-mini"} />
+            </div>
+          </div>
+          <div>
+            <Label htmlFor="ai-base-url">Base URL</Label>
+            <Input
+              id="ai-base-url"
+              value={aiBaseUrl}
+              onChange={(e) => setAiBaseUrl(e.target.value)}
+              placeholder={aiProvider === "anthropic" ? "https://api.anthropic.com" : "https://api.openai.com/v1"}
+              autoComplete="url"
+            />
+            <p className="mt-1 text-xs text-muted-foreground">OpenAI, OpenRouter, Groq, Together, local compatible servers, and native Claude are supported.</p>
+          </div>
+          <div>
+            <div className="mb-1 flex items-center justify-between">
+              <Label htmlFor="ai-key">API key</Label>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setShowAiKey(!showAiKey)}>
+                {showAiKey ? <EyeOff className="mr-1 h-3.5 w-3.5" /> : <Eye className="mr-1 h-3.5 w-3.5" />}{showAiKey ? "Hide" : "Show"}
+              </Button>
+            </div>
+            <Input id="ai-key" type={showAiKey ? "text" : "password"} value={aiKey} onChange={(e) => setAiKey(e.target.value)} autoComplete="off" />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="secondary"
+              disabled={testingAi || !aiKey.trim() || !aiModel.trim()}
+              onClick={async () => {
+                setTestingAi(true);
+                await save({ ai_enabled: aiEnabled, ai_provider: aiProvider, ai_base_url: aiBaseUrl.trim(), ai_model: aiModel.trim(), ai_api_key: aiKey.trim() });
+                try {
+                  const response = await fetch("/api/public/bot/ai-check", {
+                    method: "POST",
+                    headers: { "content-type": "application/json", "x-bot-key": data.bot_api_key },
+                    body: JSON.stringify({ transcript: "This is a connection test, not abuse.", matched: "test", keyword: "test", category: "mild", source: "text", test: true }),
+                  });
+                  const result = await response.json();
+                  if (!response.ok || String(result.reason || "").startsWith("AI provider error") || String(result.reason || "").startsWith("AI connection failed")) throw new Error(result.reason || result.error || "Connection failed");
+                  toast.success(`AI connected — test verdict: ${result.verdict}`);
+                } catch (error) {
+                  toast.error(String((error as Error)?.message || error));
+                } finally {
+                  setTestingAi(false);
+                }
+              }}
+            >
+              {testingAi ? "Testing…" : "Save & test connection"}
+            </Button>
+          </div>
+        </div>
+      </Panel>
+
       <Button
         onClick={() =>
           save({
@@ -132,6 +216,11 @@ function Rules() {
             fuzzy_matching: fuzzy,
             min_confidence: conf / 100,
             min_confidence_short: confShort / 100,
+            ai_enabled: aiEnabled,
+            ai_provider: aiProvider,
+            ai_base_url: aiBaseUrl.trim(),
+            ai_model: aiModel.trim(),
+            ai_api_key: aiKey.trim(),
           })
         }
       >

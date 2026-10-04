@@ -12,8 +12,8 @@
 - [ ] Clear the two reported false infractions. Blocked: they are in the user's external deployment, not the connected app database.
 - [x] Verify matcher and bot syntax. Existing unrelated route-render tests still fail.
 
-- [ ] Add optional AI context checking after keyword matches and before punishment.
-- [ ] Support custom OpenAI-compatible endpoints and native Anthropic Claude.
-- [ ] Keep AI credentials server-side and add dashboard save/test controls.
-- [ ] Route safe verdicts to ignore and uncertain/API failures to moderator review.
-- [ ] Apply AI context checks to both voice and text moderation.
+- [x] Add optional AI context checking after keyword matches and before punishment.
+- [x] Support custom OpenAI-compatible endpoints and native Anthropic Claude.
+- [x] Keep AI credentials server-side and add dashboard save/test controls.
+- [x] Route safe verdicts to ignore and uncertain/API failures to moderator review.
+- [x] Apply AI context checks to both voice and text moderation.

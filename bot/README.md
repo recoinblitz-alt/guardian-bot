@@ -1,6 +1,6 @@
 # VoiceGuard bot — setup
 
-This bot must run on a computer that stays on 24/7 (VPS, Railway, Render, Oracle free tier, or your PC).
+This bot must run on a computer that stays on 24/7 (VPS, Railway, Render, Oracle free tier, or your PC). The panel can optionally check the full meaning of keyword-matched sentences with an OpenAI-compatible service or native Claude before punishment.
 
 ## 1. Discord settings
 - Developer Portal → your app → Bot → turn ON **Server Members Intent**.
