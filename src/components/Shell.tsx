@@ -3,13 +3,14 @@ import { useEffect, useState, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Activity, Hash, BookText, Scale, History, LogOut, ShieldAlert } from "lucide-react";
+import { Activity, BrainCircuit, Hash, BookText, Scale, History, LogOut, ShieldAlert } from "lucide-react";
 
 const NAV = [
   { to: "/", label: "Overview", icon: Activity },
   { to: "/channels", label: "Channels & roles", icon: Hash },
   { to: "/words", label: "Word lists", icon: BookText },
   { to: "/rules", label: "Punishment rules", icon: Scale },
+  { to: "/ai-logs", label: "AI logs", icon: BrainCircuit },
   { to: "/history", label: "History", icon: History },
 ] as const;
 
