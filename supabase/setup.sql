@@ -48,6 +48,11 @@ create table public.bot_settings (
   server_words text[] not null default '{VC,Gangster MC}',
   min_confidence real not null default 0.85 check (min_confidence between 0 and 1),
   min_confidence_short real not null default 0.92 check (min_confidence_short between 0 and 1),
+  ai_enabled boolean not null default false,
+  ai_provider text not null default 'openai_compatible' check (ai_provider in ('openai_compatible','anthropic')),
+  ai_base_url text not null default '',
+  ai_model text not null default '',
+  ai_api_key text not null default '',
   bot_last_seen timestamptz,
   bot_status jsonb not null default '{}',
   updated_at timestamptz not null default now()

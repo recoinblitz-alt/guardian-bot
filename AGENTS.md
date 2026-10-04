@@ -12,7 +12,7 @@
 ## Architecture rules
 - The Discord bot runs outside Lovable (user's 24/7 host); this app is only the control panel + API. Why: voice listening needs a persistent process.
 - Bot talks to the app only via `/api/public/bot/$action` authenticated by `x-bot-key` (stored in `bot_settings.bot_api_key`). Why: no service keys leave the backend.
-- Punishment decisions are made server-side in `src/lib/punish.ts`; the bot only executes them. Why: one source of truth for the ladder.
+- Keyword matches may be context-checked by the configured AI provider before server-side punishment decisions; safe results are ignored and uncertain/errors require moderator review. Why: reduce false punishment without sending normal conversation to AI.
 - `src/lib/matcher.ts` is the single slang matcher; the bot's `matcher.js` is generated from it with `bun build --format=cjs`. Why: dashboard test box behaves exactly like the bot.
 - Deepgram recognition hints are safe server terms only; adaptive noise filtering runs before transcription, non-exact voice matches require moderator review, and sexual terms match exactly. Why: slang hints, noise, and phonetic matching can cause severe false punishments.
 - Single-row `bot_settings` (id=1); first signed-up user becomes admin via trigger; all tables admin-only via `has_role`.
