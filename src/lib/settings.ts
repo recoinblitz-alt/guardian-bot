@@ -3,7 +3,13 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import { toast } from "sonner";
 
-export type Settings = Database["public"]["Tables"]["bot_settings"]["Row"];
+export type Settings = Database["public"]["Tables"]["bot_settings"]["Row"] & {
+  ai_enabled: boolean;
+  ai_provider: "openai_compatible" | "anthropic";
+  ai_base_url: string;
+  ai_model: string;
+  ai_api_key: string;
+};
 
 export function useSettings() {
   const qc = useQueryClient();
@@ -12,13 +18,13 @@ export function useSettings() {
     queryFn: async () => {
       const { data, error } = await supabase.from("bot_settings").select("*").eq("id", 1).single();
       if (error) throw error;
-      return data;
+      return data as Settings;
     },
   });
   const save = async (patch: Partial<Settings>) => {
     const { error } = await supabase
       .from("bot_settings")
-      .update({ ...patch, updated_at: new Date().toISOString() })
+      .update({ ...patch, updated_at: new Date().toISOString() } as never)
       .eq("id", 1);
     if (error) {
       toast.error(error.message);

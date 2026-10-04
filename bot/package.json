@@ -1,7 +1,7 @@
 {
   "name": "voiceguard-bot",
   "version": "3.0.0",
-  "description": "Hindi + English Discord voice moderation bot (no AI)",
+  "description": "Multilingual Discord voice moderation bot with optional AI context checking",
   "main": "index.js",
   "private": true,
   "scripts": { "start": "node run.js" },

@@ -1,4 +1,4 @@
-// VoiceGuard — Discord voice moderation bot (no AI).
+// VoiceGuard — Discord voice moderation bot with optional context checking.
 // Listens in assigned voice channels, transcribes speech with Deepgram (rotating keys),
 // matches slang with matcher.js and punishes according to the rules set in the web panel.
 require("dotenv").config();
@@ -310,6 +310,25 @@ async function moderate(member, channel, transcript, message = null, speech = nu
       return;
     }
   }
+  if (config.settings.ai_enabled) {
+    let judged;
+    try {
+      judged = await api("ai-check", {
+        method: "POST",
+        body: { transcript: checkedText, matched: m.heard, keyword: m.word, category: m.category, source: message ? "text" : "voice" },
+      });
+    } catch (e) {
+      judged = { verdict: "uncertain", reason: `AI check failed: ${e.message}` };
+    }
+    if (judged.verdict === "safe") {
+      console.log(`🟢 AI marked context safe: "${checkedText}" → ${m.word} (${judged.reason})`);
+      return;
+    }
+    if (judged.verdict !== "violation") {
+      await requestReview(member, channel, m, checkedText, confidence, message, judged.reason);
+      return;
+    }
+  }
   if (message) await message.delete().catch((e) => console.warn("⚠️ couldn't delete message:", e.message));
   const last = cooldown.get(member.id) || 0;
   if (Date.now() - last < 4000) return;
@@ -345,22 +364,22 @@ async function moderate(member, channel, transcript, message = null, speech = nu
   await log(member, channel, m, checkedText, d, result, confidence);
 }
 
-async function requestReview(member, channel, m, transcript, confidence) {
+async function requestReview(member, channel, m, transcript, confidence, message = null, reviewReason = "The voice match is not certain enough.") {
   const { alert_channel_id, alert_role_id } = config.settings;
   const ch = alert_channel_id && (await client.channels.fetch(alert_channel_id).catch(() => null));
   if (!ch?.isTextBased()) return;
   const id = Math.random().toString(36).slice(2, 12);
   const expiresAt = Date.now() + 10 * 60_000;
-  pendingReviews.set(id, { member, channel, m, transcript, confidence, expiresAt });
+  pendingReviews.set(id, { member, channel, m, transcript, confidence, expiresAt, message });
   setTimeout(() => pendingReviews.delete(id), 10 * 60_000);
   const embed = new EmbedBuilder()
     .setColor(0xffc53d)
     .setTitle(`REVIEW NEEDED — ${member.user.tag}`)
-    .setDescription("VoiceGuard is not certain enough to punish automatically.")
+    .setDescription(reviewReason.slice(0, 500))
     .addFields(
       { name: "User", value: `<@${member.id}> (${member.id})`, inline: true },
-      { name: "Voice channel", value: channel.name, inline: true },
-      { name: "Confidence", value: `${Math.round(confidence * 100)}%`, inline: true },
+      { name: message ? "Text channel" : "Voice channel", value: channel.name, inline: true },
+      ...(confidence === null ? [] : [{ name: "Confidence", value: `${Math.round(confidence * 100)}%`, inline: true }]),
       { name: "Heard", value: `“${m.heard}” → matched “${m.word}” (${m.how})` },
       { name: "Full sentence", value: transcript.slice(0, 1000) || "—" },
       { name: "Expires", value: `<t:${Math.floor(expiresAt / 1000)}:R>` },
@@ -373,7 +392,7 @@ async function requestReview(member, channel, m, transcript, confidence) {
     new ButtonBuilder().setCustomId(`vg:${id}:ignore`).setLabel("Ignore").setStyle(ButtonStyle.Secondary),
   );
   await ch.send({
-    content: alert_role_id ? `<@&${alert_role_id}> uncertain voice match` : "Uncertain voice match",
+    content: alert_role_id ? `<@&${alert_role_id}> moderation review needed` : "Moderation review needed",
     embeds: [embed], components: [row],
     allowedMentions: { roles: alert_role_id ? [alert_role_id] : [], users: [] },
   }).catch((e) => console.error("⚠️ review alert:", e.message));
@@ -397,6 +416,7 @@ async function resolveReview(interaction, review, action) {
   const reason = `VoiceGuard moderator review: said "${review.m.heard}"`;
   let result = `approved by ${interaction.user.tag}`;
   try {
+    if (review.message) await review.message.delete().catch(() => {});
     await review.member.send(warningText(review.member, review.channel, review.transcript, review.m, d, null)).catch(() => {});
     if (action === "timeout") await review.member.timeout(duration * 1000, reason);
     else if (action === "ban") await review.member.ban({ reason, deleteMessageSeconds: 0 });
