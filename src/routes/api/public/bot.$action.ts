@@ -94,7 +94,7 @@ async function judgeContext(settings: any, input: z.infer<typeof aiCheckSchema>)
       headers["anthropic-version"] = "2023-06-01";
       body = { model: settings.ai_model.trim(), max_tokens: 180, system, messages: [{ role: "user", content: prompt }] };
     } else {
-      headers.authorization = `Bearer ${settings.ai_api_key.trim()}`;
+      headers["authorization"] = `Bearer ${settings.ai_api_key.trim()}`;
       body = { model: settings.ai_model.trim(), messages: [{ role: "system", content: system }, { role: "user", content: prompt }] };
     }
     const response = await fetch(url, { method: "POST", headers, body: JSON.stringify(body) });
@@ -123,7 +123,8 @@ async function handle(request: Request, action: string) {
   switch (action) {
     case "config": {
       const { data: words } = await db.from("slang_words").select("category, word");
-      const { bot_api_key: _k, discord_token: _t, deepgram_keys: dk, ai_api_key: _ai, ...rest } = settings;
+      const { bot_api_key: _k, discord_token: _t, deepgram_keys: dk, ...rest } = settings as typeof settings & { ai_api_key?: string };
+      delete rest.ai_api_key;
       // fingerprint lets the bot notice credential changes without receiving them every minute
       const fp = `${_t.length}:${_t.slice(-6)}|${dk.map((k: string) => k.slice(-6)).join(",")}`;
       return json({ settings: rest, words: words ?? [], credentials_fp: fp });
