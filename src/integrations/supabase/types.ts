@@ -14,6 +14,54 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_decision_logs: {
+        Row: {
+          category: string
+          created_at: string
+          id: string
+          is_test: boolean
+          keyword: string
+          matched: string
+          model: string
+          outcome: string
+          provider: string
+          reason: string
+          source: string
+          transcript: string
+          verdict: string
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          id?: string
+          is_test?: boolean
+          keyword?: string
+          matched?: string
+          model?: string
+          outcome?: string
+          provider?: string
+          reason?: string
+          source?: string
+          transcript?: string
+          verdict: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          id?: string
+          is_test?: boolean
+          keyword?: string
+          matched?: string
+          model?: string
+          outcome?: string
+          provider?: string
+          reason?: string
+          source?: string
+          transcript?: string
+          verdict?: string
+        }
+        Relationships: []
+      }
       bot_settings: {
         Row: {
           alert_channel_id: string

@@ -146,7 +146,29 @@ async function handle(request: Request, action: string) {
     case "ai-check": {
       const parsed = aiCheckSchema.safeParse(await request.json().catch(() => null));
       if (!parsed.success) return json({ error: parsed.error.flatten() }, 400);
-      return json(await judgeContext(settings, parsed.data));
+      const decision = await judgeContext(settings, parsed.data);
+      const outcome = parsed.data.test
+        ? "connection_test"
+        : decision.verdict === "violation"
+          ? "punishment_continued"
+          : decision.verdict === "safe"
+            ? "ignored"
+            : "moderator_review";
+      const { error: logError } = await db.from("ai_decision_logs").insert({
+        transcript: parsed.data.transcript,
+        matched: parsed.data.matched,
+        keyword: parsed.data.keyword,
+        category: parsed.data.category,
+        source: parsed.data.source,
+        verdict: decision.verdict,
+        reason: decision.reason,
+        provider: settings.ai_provider === "anthropic" ? "Anthropic Claude" : "OpenAI-compatible",
+        model: settings.ai_model?.trim() || "Not configured",
+        outcome,
+        is_test: parsed.data.test ?? false,
+      });
+      if (logError) console.error("Could not save AI decision log:", logError.message);
+      return json(decision);
     }
     case "offense": {
       const parsed = offenseSchema.safeParse(await request.json().catch(() => null));

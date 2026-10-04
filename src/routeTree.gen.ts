@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AiLogsRouteImport } from './routes/ai-logs'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as ChannelsRouteImport } from './routes/channels'
 import { Route as HistoryRouteImport } from './routes/history'
@@ -20,6 +21,11 @@ import { Route as ApiPublicBotActionRouteImport } from './routes/api/public/bot.
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AiLogsRoute = AiLogsRouteImport.update({
+  id: '/ai-logs',
+  path: '/ai-logs',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthRoute = AuthRouteImport.update({
@@ -55,6 +61,7 @@ const ApiPublicBotActionRoute = ApiPublicBotActionRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/ai-logs': typeof AiLogsRoute
   '/auth': typeof AuthRoute
   '/channels': typeof ChannelsRoute
   '/history': typeof HistoryRoute
@@ -64,6 +71,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/ai-logs': typeof AiLogsRoute
   '/auth': typeof AuthRoute
   '/channels': typeof ChannelsRoute
   '/history': typeof HistoryRoute
@@ -74,6 +82,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/ai-logs': typeof AiLogsRoute
   '/auth': typeof AuthRoute
   '/channels': typeof ChannelsRoute
   '/history': typeof HistoryRoute
@@ -85,6 +94,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/ai-logs'
     | '/auth'
     | '/channels'
     | '/history'
@@ -94,6 +104,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/ai-logs'
     | '/auth'
     | '/channels'
     | '/history'
@@ -103,6 +114,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/ai-logs'
     | '/auth'
     | '/channels'
     | '/history'
@@ -113,6 +125,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AiLogsRoute: typeof AiLogsRoute
   AuthRoute: typeof AuthRoute
   ChannelsRoute: typeof ChannelsRoute
   HistoryRoute: typeof HistoryRoute
@@ -128,6 +141,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ai-logs': {
+      id: '/ai-logs'
+      path: '/ai-logs'
+      fullPath: '/ai-logs'
+      preLoaderRoute: typeof AiLogsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth': {
@@ -177,6 +197,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AiLogsRoute: AiLogsRoute,
   AuthRoute: AuthRoute,
   ChannelsRoute: ChannelsRoute,
   HistoryRoute: HistoryRoute,

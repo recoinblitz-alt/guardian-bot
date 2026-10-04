@@ -99,6 +99,28 @@ create policy "admins read infractions" on public.infractions for select to auth
 create policy "admins update infractions" on public.infractions for update to authenticated using (public.has_role(auth.uid(),'admin'));
 create policy "admins delete infractions" on public.infractions for delete to authenticated using (public.has_role(auth.uid(),'admin'));
 
+create table public.ai_decision_logs (
+  id uuid primary key default gen_random_uuid(),
+  transcript text not null default '',
+  matched text not null default '',
+  keyword text not null default '',
+  category text not null default '',
+  source text not null default 'text' check (source in ('voice','text')),
+  verdict text not null check (verdict in ('violation','safe','uncertain')),
+  reason text not null default '',
+  provider text not null default '',
+  model text not null default '',
+  outcome text not null default '' check (outcome in ('punishment_continued','ignored','moderator_review','connection_test')),
+  is_test boolean not null default false,
+  created_at timestamptz not null default now()
+);
+grant select on public.ai_decision_logs to authenticated;
+grant all on public.ai_decision_logs to service_role;
+alter table public.ai_decision_logs enable row level security;
+create policy "admins read ai decision logs" on public.ai_decision_logs for select to authenticated using (public.has_role(auth.uid(),'admin'));
+create index ai_decision_logs_created_at_idx on public.ai_decision_logs (created_at desc);
+create index ai_decision_logs_verdict_idx on public.ai_decision_logs (verdict, created_at desc);
+
 insert into public.slang_words (category, word, language) values
 ('mild','chutiya','hindi'),('mild','kamina','hindi'),('mild','harami','hindi'),('mild','kutta','hindi'),('mild','gandu','hindi'),('mild','nalayak','hindi'),('mild','idiot','english'),('mild','stupid','english'),
 ('abuse','madarchod','hindi'),('abuse','mc','hindi'),('abuse','behenchod','hindi'),('abuse','bc','hindi'),('abuse','bhosdike','hindi'),('abuse','bhopadike','hindi'),('abuse','lavde','hindi'),('abuse','lauda','hindi'),('abuse','lund','hindi'),('abuse','fuck','english'),('abuse','motherfucker','english'),('abuse','bitch','english'),('abuse','asshole','english'),

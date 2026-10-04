@@ -36,6 +36,13 @@
       "when": 1791002067409,
       "tag": "0004_stt_accuracy_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791092340508,
+      "tag": "0005_create_ai_decision_logs",
+      "breakpoints": true
     }
   ]
 }
