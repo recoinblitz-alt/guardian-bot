@@ -405,7 +405,7 @@ async function resolveReview(interaction, review, action) {
     body: {
       discord_user_id: review.member.id,
       username: review.member.user.tag,
-      channel_name: review.channel.name,
+      channel_name: (review.message ? "#" : "") + review.channel.name,
       category: review.m.category,
       matched: review.m.heard,
       transcript: review.transcript,
@@ -417,7 +417,7 @@ async function resolveReview(interaction, review, action) {
   let result = `approved by ${interaction.user.tag}`;
   try {
     if (review.message) await review.message.delete().catch(() => {});
-    await review.member.send(warningText(review.member, review.channel, review.transcript, review.m, d, null)).catch(() => {});
+    await review.member.send(warningText(review.member, review.channel, review.transcript, review.m, d, review.message)).catch(() => {});
     if (action === "timeout") await review.member.timeout(duration * 1000, reason);
     else if (action === "ban") await review.member.ban({ reason, deleteMessageSeconds: 0 });
   } catch (e) {

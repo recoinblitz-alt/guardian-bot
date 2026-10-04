@@ -95,7 +95,7 @@ async function judgeContext(settings: any, input: z.infer<typeof aiCheckSchema>)
       body = { model: settings.ai_model.trim(), max_tokens: 180, system, messages: [{ role: "user", content: prompt }] };
     } else {
       headers.authorization = `Bearer ${settings.ai_api_key.trim()}`;
-      body = { model: settings.ai_model.trim(), messages: [{ role: "system", content: system }, { role: "user", content: prompt }], response_format: { type: "json_object" } };
+      body = { model: settings.ai_model.trim(), messages: [{ role: "system", content: system }, { role: "user", content: prompt }] };
     }
     const response = await fetch(url, { method: "POST", headers, body: JSON.stringify(body) });
     if (!response.ok) {
