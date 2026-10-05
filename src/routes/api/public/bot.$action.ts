@@ -154,6 +154,7 @@ async function handle(request: Request, action: string) {
           : decision.verdict === "safe"
             ? "ignored"
             : "moderator_review";
+      const aiSettings = settings as typeof settings & { ai_provider?: string; ai_model?: string };
       const { error: logError } = await db.from("ai_decision_logs").insert({
         transcript: parsed.data.transcript,
         matched: parsed.data.matched,
@@ -162,8 +163,8 @@ async function handle(request: Request, action: string) {
         source: parsed.data.source,
         verdict: decision.verdict,
         reason: decision.reason,
-        provider: settings.ai_provider === "anthropic" ? "Anthropic Claude" : "OpenAI-compatible",
-        model: settings.ai_model?.trim() || "Not configured",
+        provider: aiSettings.ai_provider === "anthropic" ? "Anthropic Claude" : "OpenAI-compatible",
+        model: aiSettings.ai_model?.trim() || "Not configured",
         outcome,
         is_test: parsed.data.test ?? false,
       });
