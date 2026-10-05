@@ -18,3 +18,5 @@
 - [x] Route safe verdicts to ignore and uncertain/API failures to moderator review.
 - [x] Apply AI context checks to both voice and text moderation.
 - [x] Store every AI verdict and show searchable, filterable AI logs in the dashboard.
+- [x] Require clear abusive intent from the full sentence and send ambiguous AI decisions to moderator review.
+- [x] Protect Roman-Hindi holiday spellings such as chuttiya/chhuttiyan from false punishment.
