@@ -17,7 +17,10 @@ export type Database = {
       ai_decision_logs: {
         Row: {
           category: string
+          channel_id: string
+          channel_name: string
           created_at: string
+          discord_user_id: string
           id: string
           is_test: boolean
           keyword: string
@@ -28,11 +31,15 @@ export type Database = {
           reason: string
           source: string
           transcript: string
+          username: string
           verdict: string
         }
         Insert: {
           category?: string
+          channel_id?: string
+          channel_name?: string
           created_at?: string
+          discord_user_id?: string
           id?: string
           is_test?: boolean
           keyword?: string
@@ -43,11 +50,15 @@ export type Database = {
           reason?: string
           source?: string
           transcript?: string
+          username?: string
           verdict: string
         }
         Update: {
           category?: string
+          channel_id?: string
+          channel_name?: string
           created_at?: string
+          discord_user_id?: string
           id?: string
           is_test?: boolean
           keyword?: string
@@ -58,6 +69,7 @@ export type Database = {
           reason?: string
           source?: string
           transcript?: string
+          username?: string
           verdict?: string
         }
         Relationships: []
@@ -70,6 +82,9 @@ export type Database = {
           bot_last_seen: string | null
           bot_status: Json
           category_weights: Json
+          command_allowed_role_ids: string[]
+          command_allowed_user_ids: string[]
+          command_channel_id: string
           deepgram_keys: string[]
           discord_token: string
           fuzzy_matching: boolean
@@ -95,6 +110,9 @@ export type Database = {
           bot_last_seen?: string | null
           bot_status?: Json
           category_weights?: Json
+          command_allowed_role_ids?: string[]
+          command_allowed_user_ids?: string[]
+          command_channel_id?: string
           deepgram_keys?: string[]
           discord_token?: string
           fuzzy_matching?: boolean
@@ -120,6 +138,9 @@ export type Database = {
           bot_last_seen?: string | null
           bot_status?: Json
           category_weights?: Json
+          command_allowed_role_ids?: string[]
+          command_allowed_user_ids?: string[]
+          command_channel_id?: string
           deepgram_keys?: string[]
           discord_token?: string
           fuzzy_matching?: boolean

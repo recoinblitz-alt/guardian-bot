@@ -69,7 +69,7 @@ function AiLogsPage() {
     return data.filter((row) => {
       if (verdict !== "all" && row.verdict !== verdict) return false;
       if (!term) return true;
-      return [row.transcript, row.matched, row.keyword, row.reason, row.model]
+      return [row.transcript, row.matched, row.keyword, row.reason, row.model, row.username, row.discord_user_id, row.channel_name]
         .some((value) => value.toLocaleLowerCase().includes(term));
     });
   }, [data, query, verdict]);
@@ -125,6 +125,13 @@ function AiLogsPage() {
                     </span>
                   </div>
                   <p className="mt-3 break-words text-sm font-medium">“{row.transcript}”</p>
+                  {!row.is_test && (
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      User <span className="font-mono text-foreground">{row.username || "Unknown"}</span>
+                      {row.discord_user_id ? <> · <span className="font-mono text-foreground">{row.discord_user_id}</span></> : null}
+                      {row.channel_name ? <> · {row.source === "voice" ? "voice" : "#"}{row.channel_name}</> : null}
+                    </p>
+                  )}
                   <p className="mt-1 text-xs text-muted-foreground">
                     Heard <span className="font-mono text-foreground">{row.matched}</span> · keyword <span className="font-mono text-foreground">{row.keyword}</span> · {CATEGORY_LABEL[row.category] ?? row.category}
                   </p>

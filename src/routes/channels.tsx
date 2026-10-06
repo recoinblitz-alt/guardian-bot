@@ -29,9 +29,9 @@ const toList = (s: string) => s.split(/[\s,]+/).map((x) => x.trim()).filter((x) 
 
 function Channels() {
   const { data, save } = useSettings();
-  const [f, setF] = useState<Partial<Settings> & { vc: string; tc: string; iu: string; ir: string; sw: string }>({ vc: "", tc: "", iu: "", ir: "", sw: "" });
+  const [f, setF] = useState<Partial<Settings> & { vc: string; tc: string; iu: string; ir: string; sw: string; cu: string; cr: string }>({ vc: "", tc: "", iu: "", ir: "", sw: "", cu: "", cr: "" });
   useEffect(() => {
-    if (data) setF({ ...data, vc: data.voice_channel_ids.join("\n"), tc: (data.text_channel_ids ?? []).join("\n"), iu: data.ignored_user_ids.join("\n"), ir: data.ignored_role_ids.join("\n"), sw: (data.server_words ?? []).join("\n") });
+    if (data) setF({ ...data, vc: data.voice_channel_ids.join("\n"), tc: (data.text_channel_ids ?? []).join("\n"), iu: data.ignored_user_ids.join("\n"), ir: data.ignored_role_ids.join("\n"), sw: (data.server_words ?? []).join("\n"), cu: (data.command_allowed_user_ids ?? []).join("\n"), cr: (data.command_allowed_role_ids ?? []).join("\n") });
   }, [data]);
   if (!data) return null;
 
@@ -49,6 +49,9 @@ function Channels() {
           log_channel_id: (f.log_channel_id ?? "").trim(),
           alert_channel_id: (f.alert_channel_id ?? "").trim(),
           alert_role_id: (f.alert_role_id ?? "").trim(),
+          command_channel_id: (f.command_channel_id ?? "").trim(),
+          command_allowed_user_ids: toList(f.cu),
+          command_allowed_role_ids: toList(f.cr),
         });
       }}
     >
@@ -57,6 +60,19 @@ function Channels() {
       </p>
       <Panel title="Voice channels to watch" desc="The bot joins these automatically and stays. One ID per line.">
         <Textarea rows={4} className="font-mono" value={f.vc} onChange={(e) => setF({ ...f, vc: e.target.value })} />
+      </Panel>
+      <Panel title="Discord word commands" desc="The private /add and /remove commands work only in this channel for Discord administrators and the users or roles listed below.">
+        <Field label="Command channel ID" hint="The only channel where word commands can run" value={f.command_channel_id ?? ""} onChange={(v) => setF({ ...f, command_channel_id: v })} />
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <div>
+            <Label>Allowed user IDs</Label>
+            <Textarea rows={3} className="font-mono" value={f.cu} onChange={(e) => setF({ ...f, cu: e.target.value })} />
+          </div>
+          <div>
+            <Label>Allowed role IDs</Label>
+            <Textarea rows={3} className="font-mono" value={f.cr} onChange={(e) => setF({ ...f, cr: e.target.value })} />
+          </div>
+        </div>
       </Panel>
       <Panel title="Text channels to watch" desc="Messages with slang are deleted and get the same punishment as voice. One ID per line (e.g. #general).">
         <label className="mb-3 flex items-center gap-2 text-sm">

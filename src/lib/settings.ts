@@ -9,6 +9,9 @@ export type Settings = Database["public"]["Tables"]["bot_settings"]["Row"] & {
   ai_base_url: string;
   ai_model: string;
   ai_api_key: string;
+  command_channel_id: string;
+  command_allowed_user_ids: string[];
+  command_allowed_role_ids: string[];
 };
 
 export function useSettings() {

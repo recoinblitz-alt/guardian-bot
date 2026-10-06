@@ -3,7 +3,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Activity, BrainCircuit, Hash, BookText, Scale, History, LogOut, ShieldAlert } from "lucide-react";
+import { Activity, BrainCircuit, Hash, BookText, Scale, History, LogOut, ShieldAlert, UserRound } from "lucide-react";
 
 const NAV = [
   { to: "/", label: "Overview", icon: Activity },
@@ -12,6 +12,7 @@ const NAV = [
   { to: "/rules", label: "Punishment rules", icon: Scale },
   { to: "/ai-logs", label: "AI logs", icon: BrainCircuit },
   { to: "/history", label: "History", icon: History },
+  { to: "/account", label: "Account", icon: UserRound },
 ] as const;
 
 export function useAdmin() {
