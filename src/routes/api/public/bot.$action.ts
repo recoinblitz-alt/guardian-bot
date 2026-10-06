@@ -48,6 +48,10 @@ const aiCheckSchema = z.object({
   keyword: z.string().min(1).max(200),
   category: z.enum(["mild", "abuse", "severe", "sexual", "provoking"]),
   source: z.enum(["voice", "text"]),
+  discord_user_id: z.string().max(32).default(""),
+  username: z.string().max(100).default(""),
+  channel_id: z.string().max(32).default(""),
+  channel_name: z.string().max(100).default(""),
   test: z.boolean().optional(),
 });
 
@@ -153,6 +157,10 @@ async function handle(request: Request, action: string) {
         model: aiSettings.ai_model?.trim() || "Not configured",
         outcome,
         is_test: parsed.data.test ?? false,
+        discord_user_id: parsed.data.discord_user_id,
+        username: parsed.data.username,
+        channel_id: parsed.data.channel_id,
+        channel_name: parsed.data.channel_name,
       });
       if (logError) console.error("Could not save AI decision log:", logError.message);
       return json(decision);
