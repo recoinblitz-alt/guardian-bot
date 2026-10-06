@@ -163,7 +163,7 @@ async function handle(request: Request, action: string) {
         channel_name: parsed.data.channel_name,
       });
       if (logError) console.error("Could not save AI decision log:", logError.message);
-      return json(decision);
+      return json({ ...decision, outcome });
     }
     case "offense": {
       const parsed = offenseSchema.safeParse(await request.json().catch(() => null));

@@ -315,12 +315,23 @@ async function moderate(member, channel, transcript, message = null, speech = nu
     try {
       judged = await api("ai-check", {
         method: "POST",
-        body: { transcript: checkedText, matched: m.heard, keyword: m.word, category: m.category, source: message ? "text" : "voice" },
+        body: {
+          transcript: checkedText,
+          matched: m.heard,
+          keyword: m.word,
+          category: m.category,
+          source: message ? "text" : "voice",
+          discord_user_id: member.id,
+          username: member.user.tag,
+          channel_id: channel.id,
+          channel_name: channel.name,
+        },
       });
     } catch (e) {
       judged = { verdict: "uncertain", reason: `AI check failed: ${e.message}` };
     }
     if (judged.verdict === "safe") {
+      await postAiDecision(member, channel, m, checkedText, judged);
       console.log(`🟢 AI marked context safe: "${checkedText}" → ${m.word} (${judged.reason})`);
       return;
     }
@@ -328,6 +339,7 @@ async function moderate(member, channel, transcript, message = null, speech = nu
       await requestReview(member, channel, m, checkedText, confidence, message, judged.reason);
       return;
     }
+    await postAiDecision(member, channel, m, checkedText, judged);
   }
   if (message) await message.delete().catch((e) => console.warn("⚠️ couldn't delete message:", e.message));
   const last = cooldown.get(member.id) || 0;
@@ -362,6 +374,29 @@ async function moderate(member, channel, transcript, message = null, speech = nu
 
   if (d.action === "alert") await alert(member, channel, m, checkedText);
   await log(member, channel, m, checkedText, d, result, confidence);
+}
+
+async function postAiDecision(member, channel, m, transcript, decision) {
+  const id = config.settings.alert_channel_id;
+  if (!id) return;
+  const ch = await client.channels.fetch(id).catch(() => null);
+  if (!ch?.isTextBased()) return;
+  const verdict = decision.verdict === "violation" ? "VIOLATION" : "SAFE";
+  const outcome = decision.verdict === "violation" ? "Punishment continues" : "Ignored — no deletion or points";
+  const embed = new EmbedBuilder()
+    .setColor(decision.verdict === "violation" ? 0xe5484d : 0x30a46c)
+    .setTitle(`AI ${verdict} — ${member.user.tag}`)
+    .addFields(
+      { name: "User", value: `<@${member.id}> (${member.id})`, inline: true },
+      { name: channel.isVoiceBased?.() ? "Voice channel" : "Text channel", value: `<#${channel.id}>`, inline: true },
+      { name: "Outcome", value: outcome, inline: true },
+      { name: "Matched", value: `“${m.heard}” → “${m.word}” (${m.category})` },
+      { name: "Full sentence", value: transcript.slice(0, 1000) || "—" },
+      { name: "AI reason", value: String(decision.reason || "No reason supplied.").slice(0, 1000) },
+    )
+    .setTimestamp();
+  await ch.send({ embeds: [embed], allowedMentions: { users: [] } })
+    .catch((e) => console.error("⚠️ AI decision alert:", e.message));
 }
 
 async function requestReview(member, channel, m, transcript, confidence, message = null, reviewReason = "The voice match is not certain enough.") {
@@ -485,21 +520,32 @@ client.on("messageUpdate", (_old, msg) => { if (msg.partial) return; client.emit
 
 // ---------------------------------------------------------------- slash commands
 const CATS = ["mild", "abuse", "severe", "sexual", "provoking", "allow"].map((c) => ({ name: c, value: c }));
-const commands = [
+const moderationCommands = [
   new SlashCommandBuilder().setName("warnings").setDescription("Show a user's offences")
     .addUserOption((o) => o.setName("user").setDescription("User").setRequired(true)),
   new SlashCommandBuilder().setName("clearwarnings").setDescription("Clear a user's points")
     .addUserOption((o) => o.setName("user").setDescription("User").setRequired(true)),
-  new SlashCommandBuilder().setName("addword").setDescription("Add a slang word/phrase")
-    .addStringOption((o) => o.setName("category").setDescription("Category").setRequired(true).addChoices(...CATS))
-    .addStringOption((o) => o.setName("word").setDescription("Word or phrase").setRequired(true)),
-  new SlashCommandBuilder().setName("removeword").setDescription("Remove a slang word/phrase")
-    .addStringOption((o) => o.setName("category").setDescription("Category").setRequired(true).addChoices(...CATS))
-    .addStringOption((o) => o.setName("word").setDescription("Word or phrase").setRequired(true)),
   new SlashCommandBuilder().setName("join").setDescription("Join your current voice channel now"),
   new SlashCommandBuilder().setName("leave").setDescription("Leave the voice channel"),
   new SlashCommandBuilder().setName("status").setDescription("Bot and Deepgram key status"),
 ].map((c) => c.setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers).toJSON());
+const wordCommands = [
+  new SlashCommandBuilder().setName("add").setDescription("Add a moderation word or phrase")
+    .addStringOption((o) => o.setName("category").setDescription("Category").setRequired(true).addChoices(...CATS))
+    .addStringOption((o) => o.setName("word").setDescription("Word or phrase").setRequired(true)),
+  new SlashCommandBuilder().setName("remove").setDescription("Remove a moderation word or phrase")
+    .addStringOption((o) => o.setName("category").setDescription("Category").setRequired(true).addChoices(...CATS))
+    .addStringOption((o) => o.setName("word").setDescription("Word or phrase").setRequired(true)),
+].map((c) => c.toJSON());
+const commands = [...moderationCommands, ...wordCommands];
+
+function canManageWords(interaction) {
+  const settings = config?.settings;
+  if (!settings || !settings.command_channel_id || interaction.channelId !== settings.command_channel_id) return false;
+  if (interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) return true;
+  if ((settings.command_allowed_user_ids || []).includes(interaction.user.id)) return true;
+  return interaction.member?.roles?.cache?.some((role) => (settings.command_allowed_role_ids || []).includes(role.id)) || false;
+}
 
 client.on("interactionCreate", async (i) => {
   if (i.isButton() && i.customId.startsWith("vg:")) {
@@ -527,6 +573,9 @@ client.on("interactionCreate", async (i) => {
   if (!i.isChatInputCommand()) return;
   await i.deferReply({ ephemeral: true });
   try {
+    if (["add", "remove"].includes(i.commandName) && !canManageWords(i)) {
+      return i.editReply("This command is restricted to the configured command channel and approved users or roles.");
+    }
     switch (i.commandName) {
       case "warnings": {
         const u = i.options.getUser("user", true);
@@ -539,11 +588,13 @@ client.on("interactionCreate", async (i) => {
         await api("clear", { method: "POST", body: { discord_user_id: u.id } });
         return i.editReply(`✅ Cleared points for ${u.tag}`);
       }
-      case "addword":
-      case "removeword": {
-        await api("word", { method: "POST", body: { category: i.options.getString("category", true), word: i.options.getString("word", true), remove: i.commandName === "removeword" } });
+      case "add":
+      case "remove": {
+        const category = i.options.getString("category", true);
+        const word = i.options.getString("word", true);
+        await api("word", { method: "POST", body: { category, word, remove: i.commandName === "remove" } });
         await loadConfig();
-        return i.editReply("✅ Word list updated");
+        return i.editReply(`✅ ${i.commandName === "remove" ? "Removed" : "Added"} **${word}** ${i.commandName === "remove" ? "from" : "to"} **${category}**.`);
       }
       case "join": {
         const ch = i.member.voice?.channel;
