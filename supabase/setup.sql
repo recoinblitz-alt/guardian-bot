@@ -53,6 +53,9 @@ create table public.bot_settings (
   ai_base_url text not null default '',
   ai_model text not null default '',
   ai_api_key text not null default '',
+  command_channel_id text not null default '',
+  command_allowed_user_ids text[] not null default '{}',
+  command_allowed_role_ids text[] not null default '{}',
   bot_last_seen timestamptz,
   bot_status jsonb not null default '{}',
   updated_at timestamptz not null default now()
@@ -112,6 +115,10 @@ create table public.ai_decision_logs (
   model text not null default '',
   outcome text not null default '' check (outcome in ('punishment_continued','ignored','moderator_review','connection_test')),
   is_test boolean not null default false,
+  discord_user_id text not null default '',
+  username text not null default '',
+  channel_id text not null default '',
+  channel_name text not null default '',
   created_at timestamptz not null default now()
 );
 grant select on public.ai_decision_logs to authenticated;
@@ -120,6 +127,7 @@ alter table public.ai_decision_logs enable row level security;
 create policy "admins read ai decision logs" on public.ai_decision_logs for select to authenticated using (public.has_role(auth.uid(),'admin'));
 create index ai_decision_logs_created_at_idx on public.ai_decision_logs (created_at desc);
 create index ai_decision_logs_verdict_idx on public.ai_decision_logs (verdict, created_at desc);
+create index ai_decision_logs_discord_user_idx on public.ai_decision_logs (discord_user_id, created_at desc);
 
 insert into public.slang_words (category, word, language) values
 ('mild','chutiya','hindi'),('mild','kamina','hindi'),('mild','harami','hindi'),('mild','kutta','hindi'),('mild','gandu','hindi'),('mild','nalayak','hindi'),('mild','idiot','english'),('mild','stupid','english'),
