@@ -571,11 +571,13 @@ client.on("interactionCreate", async (i) => {
     }
   }
   if (!i.isChatInputCommand()) return;
-  await i.deferReply({ ephemeral: true });
+  const isWordCmd = ["add", "remove"].includes(i.commandName);
+  if (isWordCmd && !canManageWords(i)) {
+    return i.reply({ content: "This command is restricted to the configured command channel and approved users or roles.", ephemeral: true });
+  }
+  // Word changes are public in the command channel so everyone can track who added what.
+  await i.deferReply({ ephemeral: !isWordCmd });
   try {
-    if (["add", "remove"].includes(i.commandName) && !canManageWords(i)) {
-      return i.editReply("This command is restricted to the configured command channel and approved users or roles.");
-    }
     switch (i.commandName) {
       case "warnings": {
         const u = i.options.getUser("user", true);
@@ -592,9 +594,14 @@ client.on("interactionCreate", async (i) => {
       case "remove": {
         const category = i.options.getString("category", true);
         const word = i.options.getString("word", true);
-        await api("word", { method: "POST", body: { category, word, remove: i.commandName === "remove" } });
+        const r = await api("word", { method: "POST", body: { category, word, remove: i.commandName === "remove" } });
+        const by = `— by ${i.user}`;
+        const other = (r.categories || []).join(", ");
+        if (r.status === "exists") return i.editReply(`⚠️ **${word}** is already added to **${category}**. ${by}`);
+        if (r.status === "exists_other") return i.editReply(`⚠️ **${word}** is already listed under **${other}**. Remove it there first to change its category. ${by}`);
+        if (r.status === "not_found") return i.editReply(`⚠️ **${word}** was not found in **${category}**${other ? ` (it is in **${other}**)` : ""}. ${by}`);
         await loadConfig();
-        return i.editReply(`✅ ${i.commandName === "remove" ? "Removed" : "Added"} **${word}** ${i.commandName === "remove" ? "from" : "to"} **${category}**.`);
+        return i.editReply(`✅ ${i.user} ${i.commandName === "remove" ? "removed" : "added"} **${word}** ${i.commandName === "remove" ? "from" : "to"} **${category}**.`);
       }
       case "join": {
         const ch = i.member.voice?.channel;

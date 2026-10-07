@@ -215,9 +215,18 @@ async function handle(request: Request, action: string) {
           remove: z.boolean().optional(),
         })
         .parse(await request.json());
-      if (b.remove) await db.from("slang_words").delete().eq("category", b.category).eq("word", b.word.toLowerCase());
-      else await db.from("slang_words").upsert({ category: b.category, word: b.word.toLowerCase() }, { onConflict: "category,word" });
-      return json({ ok: true });
+      const word = b.word.toLowerCase();
+      const { data: existing } = await db.from("slang_words").select("category").eq("word", word);
+      const cats = (existing ?? []).map((r) => r.category);
+      if (b.remove) {
+        if (!cats.includes(b.category)) return json({ ok: false, status: "not_found", categories: cats });
+        await db.from("slang_words").delete().eq("category", b.category).eq("word", word);
+        return json({ ok: true, status: "removed" });
+      }
+      if (cats.includes(b.category)) return json({ ok: false, status: "exists", categories: cats });
+      if (cats.length) return json({ ok: false, status: "exists_other", categories: cats });
+      await db.from("slang_words").insert({ category: b.category, word });
+      return json({ ok: true, status: "added" });
     }
   }
   return json({ error: "Unknown action" }, 404);
