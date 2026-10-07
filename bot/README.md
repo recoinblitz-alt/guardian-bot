@@ -29,7 +29,11 @@ On Railway/Render: create a "worker"/background service from this folder, add th
 - Voice sound-alikes and fuzzy matches are never automatic. They are sent to the alert channel for 10 minutes with Warn, Timeout 10m, Ban, and Ignore buttons when confidence is usable; weaker catches are ignored. Exact keywords still require the configured confidence before following the ladder automatically.
 - Sexual terms match only exact normalized words or exact consecutive phrases. Text moderation ignores Discord emoji names, mentions, channel tags, code, and links.
 
-Slash commands (moderators only): /warnings /clearwarnings /addword /removeword /join /leave /status
+Slash commands (moderators only): /warnings /clearwarnings /join /leave /status
+
+Word commands: `/add category:abuse word:sala` and `/remove category:abuse word:sala`. They work only in the **Command channel ID** set on Channels & roles, for Discord administrators plus the allowed user/role IDs listed there. Replies are private.
+
+AI decisions (safe and violation) are posted to the Alert channel with the user, channel, sentence and AI reason.
 
 `matcher.js` is generated from the panel's code — the test box on the Word lists page behaves exactly like the bot.
 

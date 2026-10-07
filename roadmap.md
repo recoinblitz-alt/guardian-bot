@@ -21,6 +21,6 @@
 - [x] Require clear abusive intent from the full sentence and send ambiguous AI decisions to moderator review.
 - [x] Protect Roman-Hindi holiday spellings such as chuttiya/chhuttiyan from false punishment.
 
-- [ ] Add Discord user and channel attribution to AI decision logs and Alert-channel posts.
-- [ ] Add channel-restricted `/add` and `/remove` commands with dashboard-managed user/role access.
-- [ ] Add signed-in administrator password change controls.
+- [x] Add Discord user and channel attribution to AI decision logs and Alert-channel posts.
+- [x] Add channel-restricted `/add` and `/remove` commands with dashboard-managed user/role access.
+- [x] Add signed-in administrator password change controls.
