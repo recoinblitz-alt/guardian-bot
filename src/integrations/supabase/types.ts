@@ -179,6 +179,7 @@ export type Database = {
           id: string
           matched: string
           points: number
+          punishment_expires_at: string | null
           transcript: string
           username: string
         }
@@ -196,6 +197,7 @@ export type Database = {
           id?: string
           matched?: string
           points?: number
+          punishment_expires_at?: string | null
           transcript?: string
           username?: string
         }
@@ -213,6 +215,7 @@ export type Database = {
           id?: string
           matched?: string
           points?: number
+          punishment_expires_at?: string | null
           transcript?: string
           username?: string
         }
@@ -220,6 +223,8 @@ export type Database = {
       }
       punishment_appeals: {
         Row: {
+          claim_token: string | null
+          claimed_at: string | null
           created_at: string
           discord_user_id: string
           explanation: string
@@ -234,6 +239,8 @@ export type Database = {
           status: string
         }
         Insert: {
+          claim_token?: string | null
+          claimed_at?: string | null
           created_at?: string
           discord_user_id: string
           explanation: string
@@ -248,6 +255,8 @@ export type Database = {
           status?: string
         }
         Update: {
+          claim_token?: string | null
+          claimed_at?: string | null
           created_at?: string
           discord_user_id?: string
           explanation?: string
@@ -318,15 +327,26 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      finish_punishment_appeal: {
-        Args: {
-          _approved: boolean
-          _id: string
-          _moderator_id: string
-          _resolution: string
-        }
-        Returns: undefined
-      }
+      finish_punishment_appeal:
+        | {
+            Args: {
+              _approved: boolean
+              _id: string
+              _moderator_id: string
+              _resolution: string
+            }
+            Returns: undefined
+          }
+        | {
+            Args: {
+              _approved: boolean
+              _claim_token: string
+              _id: string
+              _moderator_id: string
+              _resolution: string
+            }
+            Returns: undefined
+          }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

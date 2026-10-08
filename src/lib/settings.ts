@@ -12,6 +12,7 @@ export type Settings = Database["public"]["Tables"]["bot_settings"]["Row"] & {
   command_channel_id: string;
   command_allowed_user_ids: string[];
   command_allowed_role_ids: string[];
+  alert_role_ids: string[];
 };
 
 export function useSettings() {

@@ -57,6 +57,13 @@
       "when": 1791441537072,
       "tag": "0007_punishment_appeals_and_alert_roles",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791441575185,
+      "tag": "0008_appeal_reversal_tracking",
+      "breakpoints": true
     }
   ]
 }

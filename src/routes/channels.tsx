@@ -29,9 +29,9 @@ const toList = (s: string) => s.split(/[\s,]+/).map((x) => x.trim()).filter((x) 
 
 function Channels() {
   const { data, save } = useSettings();
-  const [f, setF] = useState<Partial<Settings> & { vc: string; tc: string; iu: string; ir: string; sw: string; cu: string; cr: string }>({ vc: "", tc: "", iu: "", ir: "", sw: "", cu: "", cr: "" });
+  const [f, setF] = useState<Partial<Settings> & { vc: string; tc: string; iu: string; ir: string; sw: string; cu: string; cr: string; ar: string }>({ vc: "", tc: "", iu: "", ir: "", sw: "", cu: "", cr: "", ar: "" });
   useEffect(() => {
-    if (data) setF({ ...data, vc: data.voice_channel_ids.join("\n"), tc: (data.text_channel_ids ?? []).join("\n"), iu: data.ignored_user_ids.join("\n"), ir: data.ignored_role_ids.join("\n"), sw: (data.server_words ?? []).join("\n"), cu: (data.command_allowed_user_ids ?? []).join("\n"), cr: (data.command_allowed_role_ids ?? []).join("\n") });
+    if (data) setF({ ...data, vc: data.voice_channel_ids.join("\n"), tc: (data.text_channel_ids ?? []).join("\n"), iu: data.ignored_user_ids.join("\n"), ir: data.ignored_role_ids.join("\n"), sw: (data.server_words ?? []).join("\n"), cu: (data.command_allowed_user_ids ?? []).join("\n"), cr: (data.command_allowed_role_ids ?? []).join("\n"), ar: (data.alert_role_ids?.length ? data.alert_role_ids : data.alert_role_id ? [data.alert_role_id] : []).join("\n") });
   }, [data]);
   if (!data) return null;
 
@@ -48,7 +48,8 @@ function Channels() {
           server_words: [...new Set(f.sw.split("\n").map((x) => x.trim()).filter(Boolean))].slice(0, 50),
           log_channel_id: (f.log_channel_id ?? "").trim(),
           alert_channel_id: (f.alert_channel_id ?? "").trim(),
-          alert_role_id: (f.alert_role_id ?? "").trim(),
+          alert_role_ids: [...new Set(toList(f.ar))].slice(0, 20),
+          alert_role_id: toList(f.ar)[0] ?? "",
           command_channel_id: (f.command_channel_id ?? "").trim(),
           command_allowed_user_ids: toList(f.cu),
           command_allowed_role_ids: toList(f.cr),
@@ -90,8 +91,12 @@ function Channels() {
       <Panel title="Reporting">
         <div className="grid gap-4 sm:grid-cols-3">
           <Field label="Log channel ID" hint="Every warn/timeout/ban is posted here" value={f.log_channel_id ?? ""} onChange={(v) => setF({ ...f, log_channel_id: v })} />
-          <Field label="Alert channel ID" hint="Provoking alerts go here" value={f.alert_channel_id ?? ""} onChange={(v) => setF({ ...f, alert_channel_id: v })} />
-          <Field label="Role to tag" hint="Admin / moderator role ID" value={f.alert_role_id ?? ""} onChange={(v) => setF({ ...f, alert_role_id: v })} />
+          <Field label="Alert channel ID" hint="AI decisions, moderation reviews and appeals" value={f.alert_channel_id ?? ""} onChange={(v) => setF({ ...f, alert_channel_id: v })} />
+          <div>
+            <Label htmlFor="alert-roles">Roles to tag</Label>
+            <Textarea id="alert-roles" rows={3} className="font-mono" value={f.ar} onChange={(e) => setF({ ...f, ar: e.target.value })} />
+            <p className="mt-1 text-xs text-muted-foreground">Moderator role IDs, one per line (up to 20)</p>
+          </div>
         </div>
       </Panel>
       <Panel title="Never moderate" desc="User or role IDs the bot should ignore. One per line.">
