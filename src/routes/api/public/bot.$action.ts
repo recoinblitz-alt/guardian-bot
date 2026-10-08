@@ -32,6 +32,9 @@ const offenseSchema = z.object({
   discord_user_id: z.string().min(1).max(32),
   username: z.string().max(100).default(""),
   channel_name: z.string().max(100).default(""),
+  guild_id: z.string().regex(/^\d{5,25}$/).optional(),
+  ai_verdict: z.string().max(30).default(""),
+  ai_reason: z.string().max(1000).default(""),
   category: z.enum(["mild", "abuse", "severe", "sexual", "provoking"]),
   matched: z.string().max(200).transform((s) => s.slice(0, 200)).default(""),
   transcript: z.string().transform((s) => s.slice(0, 1000)).default(""),
@@ -175,8 +178,9 @@ async function handle(request: Request, action: string) {
         weights: settings.category_weights as Record<string, number>,
         sexualInstantBan: settings.sexual_instant_ban,
       });
-      await db.from("infractions").insert({ ...o, action: d.action, duration_seconds: d.duration, points: d.points });
-      return json(d);
+      const { data: infraction, error } = await db.from("infractions").insert({ ...o, action: d.action, duration_seconds: d.duration, points: d.points }).select("id").single();
+      if (error || !infraction) return json({ error: "Could not record punishment" }, 500);
+      return json({ ...d, infraction_id: infraction.id });
     }
     case "review-offense": {
       const parsed = reviewOffenseSchema.safeParse(await request.json().catch(() => null));
@@ -189,8 +193,66 @@ async function handle(request: Request, action: string) {
         sexualInstantBan: false,
       });
       const d = { ...automatic, action: reviewedAction, duration: reviewedAction === "timeout" ? duration_seconds : 0 };
-      await db.from("infractions").insert({ ...o, action: d.action, duration_seconds: d.duration, points: d.points });
-      return json(d);
+      const { data: infraction, error } = await db.from("infractions").insert({ ...o, action: d.action, duration_seconds: d.duration, points: d.points }).select("id").single();
+      if (error || !infraction) return json({ error: "Could not record punishment" }, 500);
+      return json({ ...d, infraction_id: infraction.id });
+    }
+    case "punishment-applied": {
+      const b = z.object({ infraction_id: z.string().uuid(), punishment_expires_at: z.string().datetime().nullable() }).parse(await request.json());
+      const { error } = await db.from("infractions").update({ punishment_expires_at: b.punishment_expires_at }).eq("id", b.infraction_id);
+      if (error) throw error;
+      return json({ ok: true });
+    }
+    case "appeal-case": {
+      const b = z.object({ infraction_id: z.string().uuid(), discord_user_id: z.string().min(1).max(32) }).parse(await request.json());
+      const { data: infraction, error } = await db.from("infractions").select("*").eq("id", b.infraction_id).eq("discord_user_id", b.discord_user_id).single();
+      if (error || !infraction || infraction.cleared || !["warn", "timeout", "ban"].includes(infraction.action)) return json({ error: "This punishment cannot be appealed" }, 404);
+      return json({ infraction });
+    }
+    case "appeal-submit": {
+      const b = z.object({ infraction_id: z.string().uuid(), discord_user_id: z.string().min(1).max(32), explanation: z.string().trim().min(5).max(1500) }).parse(await request.json());
+      const { data: infraction } = await db.from("infractions").select("*").eq("id", b.infraction_id).eq("discord_user_id", b.discord_user_id).eq("cleared", false).single();
+      if (!infraction || !["warn", "timeout", "ban"].includes(infraction.action) || !infraction.guild_id) return json({ error: "This punishment cannot be appealed" }, 404);
+      const { data: appeal, error } = await db.from("punishment_appeals").insert(b).select("*").single();
+      if (error?.code === "23505") return json({ error: "An appeal has already been submitted for this punishment" }, 409);
+      if (error) throw error;
+      return json({ appeal, infraction });
+    }
+    case "appeal-pending": {
+      const { data, error } = await db.from("punishment_appeals").select("*, infraction:infractions(*)").eq("status", "pending").eq("review_message_id", "").order("created_at").limit(25);
+      if (error) throw error;
+      return json({ appeals: data });
+    }
+    case "appeal-posted": {
+      const b = z.object({ appeal_id: z.string().uuid(), review_channel_id: z.string().min(1).max(32), review_message_id: z.string().min(1).max(32) }).parse(await request.json());
+      const { error } = await db.from("punishment_appeals").update({ review_channel_id: b.review_channel_id, review_message_id: b.review_message_id }).eq("id", b.appeal_id);
+      if (error) throw error;
+      return json({ ok: true });
+    }
+    case "appeal-claim": {
+      const b = z.object({ appeal_id: z.string().uuid(), guild_id: z.string().min(1).max(32), moderator_id: z.string().min(1).max(32), moderator_name: z.string().max(100) }).parse(await request.json());
+      const { data: target } = await db.from("punishment_appeals").select("infraction:infractions(guild_id)").eq("id", b.appeal_id).single();
+      if (!target || (target.infraction as { guild_id: string } | null)?.guild_id !== b.guild_id) return json({ error: "Appeal belongs to a different server" }, 403);
+      const claimToken = crypto.randomUUID();
+      const { data: appeal, error } = await db.from("punishment_appeals").update({ status: "processing", moderator_id: b.moderator_id, moderator_name: b.moderator_name, claim_token: claimToken, claimed_at: new Date().toISOString() }).eq("id", b.appeal_id).eq("status", "pending").select("*, infraction:infractions(*)").maybeSingle();
+      if (error) throw error;
+      if (!appeal) return json({ error: "This appeal is already being reviewed or resolved" }, 409);
+      const infraction = appeal.infraction;
+      const { data: newer, error: newerError } = await db.from("infractions").select("id").eq("discord_user_id", infraction.discord_user_id).eq("guild_id", infraction.guild_id).eq("cleared", false).in("action", ["timeout", "ban"]).gt("created_at", infraction.created_at).limit(1);
+      if (newerError) throw newerError;
+      return json({ appeal, infraction, newer_punishment: !!newer?.length });
+    }
+    case "appeal-release": {
+      const b = z.object({ appeal_id: z.string().uuid(), claim_token: z.string().uuid() }).parse(await request.json());
+      const { error } = await db.from("punishment_appeals").update({ status: "pending", claim_token: null }).eq("id", b.appeal_id).eq("status", "processing").eq("claim_token", b.claim_token);
+      if (error) throw error;
+      return json({ ok: true });
+    }
+    case "appeal-finish": {
+      const b = z.object({ appeal_id: z.string().uuid(), claim_token: z.string().uuid(), moderator_id: z.string().min(1).max(32), approved: z.boolean(), resolution: z.string().max(1000) }).parse(await request.json());
+      const { error } = await db.rpc("finish_punishment_appeal", { _id: b.appeal_id, _claim_token: b.claim_token, _moderator_id: b.moderator_id, _approved: b.approved, _resolution: b.resolution });
+      if (error) throw error;
+      return json({ ok: true });
     }
     case "warnings": {
       const user = z.string().min(1).max(32).parse(url.searchParams.get("user"));
