@@ -1,5 +1,9 @@
 # Roadmap
 
+- [ ] Add durable punishment appeals, explanation submission, moderator decisions and specific-punishment reversal.
+- [ ] Support multiple reporting roles while preserving the existing selection.
+- [ ] Verify appeal safeguards and reporting controls.
+
 - [x] Send uncertain voice matches to moderator review.
 - [x] Add Warn, 10-minute Timeout, Ban, and Ignore controls.
 - [x] Keep exact and high-confidence matches automatic.

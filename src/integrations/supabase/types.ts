@@ -78,6 +78,7 @@ export type Database = {
         Row: {
           alert_channel_id: string
           alert_role_id: string
+          alert_role_ids: string[]
           bot_api_key: string
           bot_last_seen: string | null
           bot_status: Json
@@ -106,6 +107,7 @@ export type Database = {
         Insert: {
           alert_channel_id?: string
           alert_role_id?: string
+          alert_role_ids?: string[]
           bot_api_key?: string
           bot_last_seen?: string | null
           bot_status?: Json
@@ -134,6 +136,7 @@ export type Database = {
         Update: {
           alert_channel_id?: string
           alert_role_id?: string
+          alert_role_ids?: string[]
           bot_api_key?: string
           bot_last_seen?: string | null
           bot_status?: Json
@@ -164,12 +167,15 @@ export type Database = {
       infractions: {
         Row: {
           action: string
+          ai_reason: string
+          ai_verdict: string
           category: string
           channel_name: string
           cleared: boolean
           created_at: string
           discord_user_id: string
           duration_seconds: number
+          guild_id: string
           id: string
           matched: string
           points: number
@@ -178,12 +184,15 @@ export type Database = {
         }
         Insert: {
           action: string
+          ai_reason?: string
+          ai_verdict?: string
           category: string
           channel_name?: string
           cleared?: boolean
           created_at?: string
           discord_user_id: string
           duration_seconds?: number
+          guild_id?: string
           id?: string
           matched?: string
           points?: number
@@ -192,12 +201,15 @@ export type Database = {
         }
         Update: {
           action?: string
+          ai_reason?: string
+          ai_verdict?: string
           category?: string
           channel_name?: string
           cleared?: boolean
           created_at?: string
           discord_user_id?: string
           duration_seconds?: number
+          guild_id?: string
           id?: string
           matched?: string
           points?: number
@@ -205,6 +217,59 @@ export type Database = {
           username?: string
         }
         Relationships: []
+      }
+      punishment_appeals: {
+        Row: {
+          created_at: string
+          discord_user_id: string
+          explanation: string
+          id: string
+          infraction_id: string
+          moderator_id: string
+          moderator_name: string
+          resolution: string
+          resolved_at: string | null
+          review_channel_id: string
+          review_message_id: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          discord_user_id: string
+          explanation: string
+          id?: string
+          infraction_id: string
+          moderator_id?: string
+          moderator_name?: string
+          resolution?: string
+          resolved_at?: string | null
+          review_channel_id?: string
+          review_message_id?: string
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          discord_user_id?: string
+          explanation?: string
+          id?: string
+          infraction_id?: string
+          moderator_id?: string
+          moderator_name?: string
+          resolution?: string
+          resolved_at?: string | null
+          review_channel_id?: string
+          review_message_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "punishment_appeals_infraction_id_fkey"
+            columns: ["infraction_id"]
+            isOneToOne: true
+            referencedRelation: "infractions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       slang_words: {
         Row: {
@@ -253,6 +318,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      finish_punishment_appeal: {
+        Args: {
+          _approved: boolean
+          _id: string
+          _moderator_id: string
+          _resolution: string
+        }
+        Returns: undefined
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
