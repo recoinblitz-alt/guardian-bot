@@ -35,6 +35,15 @@ Word commands: `/add category:abuse word:sala` and `/remove category:abuse word:
 
 AI decisions (safe and violation) are posted to the Alert channel with the user, channel, sentence and AI reason.
 
+## Punishment appeals
+- New warning, timeout and ban DMs include **Appeal punishment**. The user submits their intended meaning and why the punishment was wrong.
+- One appeal is allowed per punishment. Appeals are saved and queued for the Alert channel, including after a bot restart.
+- **Approve appeal** pardons only that infraction's points and lifts its associated timeout or ban when the active restriction still matches that case. Different or newer restrictions are never lifted. **Reject appeal** leaves everything unchanged.
+- Only members with Moderate Members permission or a configured reporting role can decide appeals in the configured Alert channel. Decisions record the moderator, notify the user by DM, and post in the Log channel.
+- Set **Roles to tag** on Channels & roles to one or more moderator role IDs. Existing selected roles are preserved.
+- Ban appeals work from the DM after leaving the server. The bot must remain online, and the user must have received the punishment DM. Closed DMs prevent delivery; no public appeal link is provided in this version.
+- Apply the punishment appeal upgrade migrations to your self-hosted database before redeploying the panel and bot. Old punishments without server attribution cannot use these new appeal buttons.
+
 `matcher.js` is generated from the panel's code — the test box on the Word lists page behaves exactly like the bot.
 
 ## Saving Deepgram minutes (new)

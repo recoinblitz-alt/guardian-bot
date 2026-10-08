@@ -13,6 +13,8 @@ const {
 const prism = require("prism-media");
 const DeepgramManager = require("./deepgram-manager");
 const { compile, findMatches, normalize } = require("./matcher");
+const { alertRoles } = require("./appeal-helpers");
+const createAppeals = require("./appeals");
 
 const { PANEL_URL, BOT_KEY } = process.env;
 if (!PANEL_URL || !BOT_KEY) {
@@ -78,8 +80,20 @@ async function heartbeat() {
 
 // ---------------------------------------------------------------- discord
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.DirectMessages],
 });
+
+function canModerate(interaction) {
+  return interaction.memberPermissions?.has(PermissionFlagsBits.ModerateMembers) ||
+    interaction.member?.roles?.cache?.some((role) => alertRoles(config?.settings).includes(role.id)) || false;
+}
+const appeals = createAppeals({ client, api, getSettings: () => config?.settings, canModerate });
+
+async function sendPunishmentNotice(member, channel, transcript, m, d, message) {
+  const components = d.infraction_id && ["warn", "timeout", "ban"].includes(d.action) ? [appeals.button(d.infraction_id)] : [];
+  await member.send({ content: `${warningText(member, channel, transcript, m, d, message)}\nPunishment: **${d.action.toUpperCase()}**${d.duration ? ` (${Math.round(d.duration / 60)} min)` : ""}`, components, allowedMentions: { parse: [] } })
+    .catch((e) => console.warn("⚠️ Punishment DM unavailable (appeal button could not be delivered):", e.message));
+}
 
 function isIgnored(member) {
   const s = config?.settings;
@@ -287,6 +301,7 @@ async function moderate(member, channel, transcript, message = null, speech = nu
   if (!matches.length) return;
   const m = matches[0];
   let confidence = null;
+  let aiDecision = null;
   if (!message) {
     const voice = voiceConfidence(m, speech);
     confidence = voice.confidence;
@@ -330,6 +345,7 @@ async function moderate(member, channel, transcript, message = null, speech = nu
     } catch (e) {
       judged = { verdict: "uncertain", reason: `AI check failed: ${e.message}` };
     }
+    aiDecision = judged;
     if (judged.verdict === "safe") {
       await postAiDecision(member, channel, m, checkedText, judged);
       console.log(`🟢 AI marked context safe: "${checkedText}" → ${m.word} (${judged.reason})`);
@@ -351,22 +367,24 @@ async function moderate(member, channel, transcript, message = null, speech = nu
   try {
     d = await api("offense", {
       method: "POST",
-      body: { discord_user_id: member.id, username: member.user.tag, channel_name: (message ? "#" : "") + channel.name, category: m.category, matched: m.heard, transcript: checkedText },
+      body: { discord_user_id: member.id, username: member.user.tag, channel_name: (message ? "#" : "") + channel.name, guild_id: member.guild.id, ai_verdict: aiDecision?.verdict || "", ai_reason: aiDecision?.reason || "", category: m.category, matched: m.heard, transcript: checkedText },
     });
   } catch (e) {
     return console.error("⚠️", e.message);
   }
 
-  const reason = `VoiceGuard: ${d.reason} — said "${m.heard}"`;
+  const reason = `VoiceGuard case:${d.infraction_id}: ${d.reason} — said "${m.heard}"`;
   let result = "done";
   try {
-    const notice = warningText(member, channel, checkedText, m, d, message);
-    await member.send(notice).catch(() => {});
+    await sendPunishmentNotice(member, channel, checkedText, m, d, message);
     if (message) {
       const sent = await channel.send(`⚠️ <@${member.id}>, your message was removed for saying **${m.heard}** (matched **${m.word}**).`).catch(() => null);
       if (sent) setTimeout(() => sent.delete().catch(() => {}), 10_000);
     }
-    if (d.action === "timeout") await member.timeout(d.duration * 1000, reason);
+    if (d.action === "timeout") {
+      const applied = await member.timeout(d.duration * 1000, reason);
+      await api("punishment-applied", { method: "POST", body: { infraction_id: d.infraction_id, punishment_expires_at: applied.communicationDisabledUntil?.toISOString() || null } });
+    }
     else if (d.action === "ban") await member.ban({ reason, deleteMessageSeconds: 0 });
   } catch (e) {
     result = `failed: ${e.message}`;
@@ -395,17 +413,19 @@ async function postAiDecision(member, channel, m, transcript, decision) {
       { name: "AI reason", value: String(decision.reason || "No reason supplied.").slice(0, 1000) },
     )
     .setTimestamp();
-  await ch.send({ embeds: [embed], allowedMentions: { users: [] } })
+  const roles = alertRoles(config.settings);
+  await ch.send({ content: roles.map((id) => `<@&${id}>`).join(" ") || undefined, embeds: [embed], allowedMentions: { users: [], roles } })
     .catch((e) => console.error("⚠️ AI decision alert:", e.message));
 }
 
 async function requestReview(member, channel, m, transcript, confidence, message = null, reviewReason = "The voice match is not certain enough.") {
-  const { alert_channel_id, alert_role_id } = config.settings;
+  const { alert_channel_id } = config.settings;
+  const roles = alertRoles(config.settings);
   const ch = alert_channel_id && (await client.channels.fetch(alert_channel_id).catch(() => null));
   if (!ch?.isTextBased()) return;
   const id = Math.random().toString(36).slice(2, 12);
   const expiresAt = Date.now() + 10 * 60_000;
-  pendingReviews.set(id, { member, channel, m, transcript, confidence, expiresAt, message });
+  pendingReviews.set(id, { member, channel, m, transcript, confidence, expiresAt, message, reviewReason });
   setTimeout(() => pendingReviews.delete(id), 10 * 60_000);
   const embed = new EmbedBuilder()
     .setColor(0xffc53d)
@@ -427,9 +447,9 @@ async function requestReview(member, channel, m, transcript, confidence, message
     new ButtonBuilder().setCustomId(`vg:${id}:ignore`).setLabel("Ignore").setStyle(ButtonStyle.Secondary),
   );
   await ch.send({
-    content: alert_role_id ? `<@&${alert_role_id}> moderation review needed` : "Moderation review needed",
+    content: `${roles.map((id) => `<@&${id}>`).join(" ")} Moderation review needed`,
     embeds: [embed], components: [row],
-    allowedMentions: { roles: alert_role_id ? [alert_role_id] : [], users: [] },
+    allowedMentions: { roles, users: [] },
   }).catch((e) => console.error("⚠️ review alert:", e.message));
 }
 
@@ -441,6 +461,9 @@ async function resolveReview(interaction, review, action) {
       discord_user_id: review.member.id,
       username: review.member.user.tag,
       channel_name: (review.message ? "#" : "") + review.channel.name,
+      guild_id: review.member.guild.id,
+      ai_verdict: "moderator_review",
+      ai_reason: review.reviewReason || "Moderator reviewed uncertain match",
       category: review.m.category,
       matched: review.m.heard,
       transcript: review.transcript,
@@ -448,12 +471,15 @@ async function resolveReview(interaction, review, action) {
       duration_seconds: duration,
     },
   });
-  const reason = `VoiceGuard moderator review: said "${review.m.heard}"`;
+  const reason = `VoiceGuard case:${d.infraction_id} moderator review: said "${review.m.heard}"`;
   let result = `approved by ${interaction.user.tag}`;
   try {
     if (review.message) await review.message.delete().catch(() => {});
-    await review.member.send(warningText(review.member, review.channel, review.transcript, review.m, d, review.message)).catch(() => {});
-    if (action === "timeout") await review.member.timeout(duration * 1000, reason);
+    await sendPunishmentNotice(review.member, review.channel, review.transcript, review.m, d, review.message);
+    if (action === "timeout") {
+      const applied = await review.member.timeout(duration * 1000, reason);
+      await api("punishment-applied", { method: "POST", body: { infraction_id: d.infraction_id, punishment_expires_at: applied.communicationDisabledUntil?.toISOString() || null } });
+    }
     else if (action === "ban") await review.member.ban({ reason, deleteMessageSeconds: 0 });
   } catch (e) {
     result = `failed: ${e.message}`;
@@ -486,12 +512,13 @@ async function log(member, channel, m, transcript, d, result, confidence = null)
 }
 
 async function alert(member, channel, m, transcript) {
-  const { alert_channel_id, alert_role_id } = config.settings;
+  const { alert_channel_id } = config.settings;
+  const roles = alertRoles(config.settings);
   const ch = alert_channel_id && (await client.channels.fetch(alert_channel_id).catch(() => null));
   if (!ch?.isTextBased()) return;
   await ch.send({
-    content: `${alert_role_id ? `<@&${alert_role_id}> ` : ""}👀 <@${member.id}> may be provoking in **${channel.name}**: “${transcript.slice(0, 300)}”`,
-    allowedMentions: { roles: alert_role_id ? [alert_role_id] : [], users: [] },
+    content: `${roles.map((id) => `<@&${id}>`).join(" ")} 👀 <@${member.id}> may be provoking in **${channel.name}**: “${transcript.slice(0, 300)}”`,
+    allowedMentions: { roles, users: [] },
   });
 }
 
@@ -548,12 +575,11 @@ function canManageWords(interaction) {
 }
 
 client.on("interactionCreate", async (i) => {
+  if (await appeals.handle(i)) return;
   if (i.isButton() && i.customId.startsWith("vg:")) {
     const [, id, action] = i.customId.split(":");
     const review = pendingReviews.get(id);
-    const canModerate = i.memberPermissions?.has(PermissionFlagsBits.ModerateMembers) ||
-      (config?.settings.alert_role_id && i.member?.roles?.cache?.has(config.settings.alert_role_id));
-    if (!canModerate) return i.reply({ content: "You need the moderator role to decide this.", ephemeral: true });
+    if (!canModerate(i)) return i.reply({ content: "You need the moderator role to decide this.", ephemeral: true });
     if (!review || review.expiresAt <= Date.now()) {
       pendingReviews.delete(id);
       return i.update({ content: "This review expired.", components: [] });
@@ -630,6 +656,8 @@ client.once("clientReady", async () => {
   await loadConfig();
   await ensureJoined();
   await heartbeat();
+  await appeals.deliverPending();
+  setInterval(() => appeals.deliverPending(), 60_000);
   setInterval(loadConfig, 60_000);
   setInterval(ensureJoined, 15_000);
   setInterval(heartbeat, 60_000);
