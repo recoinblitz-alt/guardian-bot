@@ -1,5 +1,8 @@
 # Roadmap
 
+- [ ] Repair voice capture and final transcript delivery without sending silence; add regression tests and diagnostics.
+- [ ] Verify repaired voice moderation in the user's live Discord server. Blocked: requires redeploy on the user's external host and real voice input.
+
 - [x] Prevent message deletion when punishment recording fails; surface failures to moderators and test the ordering (9 flow tests plus 4 appeal tests and 12 AI tests pass).
 - [x] Provide a rerunnable SQL upgrade for AI logging, appeals, and punishment recording permissions.
 

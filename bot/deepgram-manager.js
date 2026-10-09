@@ -442,6 +442,8 @@ class DeepgramManager {
     }
 
     let closed = false;
+    let closing = false;
+    let closeTimer = null;
     let totalBytesSent = 0;
     const pending = []; // audio captured before the socket opened
 
@@ -457,6 +459,7 @@ class DeepgramManager {
         const b = pending.shift();
         try { ws.send(b); totalBytesSent += b.length; } catch (_) {}
       }
+      if (closing) requestFinalize();
     });
 
     // -------------------------------------------------------
@@ -489,12 +492,11 @@ class DeepgramManager {
                 ?.trim();
 
             if (
-              transcript &&
               typeof onTranscript ===
                 "function"
             ) {
               onTranscript({
-                transcript,
+                transcript: transcript || "",
                 isFinal: Boolean(message.is_final),
                 speechFinal: Boolean(message.speech_final),
                 confidence: Number(alternative?.confidence ?? 0),
@@ -508,6 +510,8 @@ class DeepgramManager {
                 raw: message
               });
             }
+
+            if (closing && message.from_finalize) requestClose();
 
             return;
           }
@@ -602,6 +606,7 @@ class DeepgramManager {
       "close",
       (code, reason) => {
         closed = true;
+        clearTimeout(closeTimer);
 
         console.log(
           `🔌 Deepgram Account ${account.id} closed. Code: ${code}`
@@ -637,7 +642,7 @@ class DeepgramManager {
         return false;
       }
 
-      if (closed) return false;
+      if (closed || closing) return false;
       if (ws.readyState === WebSocket.CONNECTING) {
         if (pending.length < 200) pending.push(buffer);
         return true;
@@ -669,55 +674,30 @@ class DeepgramManager {
     // CLOSE STREAM
     // -------------------------------------------------------
 
-    const close = () => {
-      if (closed) {
-        return;
-      }
-
+    // Control messages finalize existing audio without uploading silent PCM.
+    const requestClose = () => {
+      if (closed) return;
+      clearTimeout(closeTimer);
       try {
-        if (
-          ws.readyState ===
-          WebSocket.OPEN
-        ) {
-          // Deepgram finalize
-          try {
-            ws.send(
-              JSON.stringify({
-                type: "Finalize"
-              })
-            );
-          } catch (_) {}
-
-          setTimeout(() => {
-            try {
-              if (
-                ws.readyState ===
-                WebSocket.OPEN
-              ) {
-                ws.send(
-                  JSON.stringify({
-                    type:
-                      "CloseStream"
-                  })
-                );
-              }
-            } catch (_) {}
-
-            try {
-              ws.close();
-            } catch (_) {}
-          }, 150);
-        } else {
-          try {
-            ws.close();
-          } catch (_) {}
-        }
-      } catch (error) {
-        console.warn(
-          `⚠️ Error closing Deepgram Account ${account.id}:`,
-          error.message
-        );
-      }
+        if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "CloseStream" }));
+      } catch (error) { onError?.(error); }
+      // Allow the server's remaining Results/Metadata to arrive before forcing exit.
+      closeTimer = setTimeout(() => ws.terminate(), 2000);
+    };
+    const requestFinalize = () => {
+      clearTimeout(closeTimer);
+      try { ws.send(JSON.stringify({ type: "Finalize" })); }
+      catch (error) { onError?.(error); }
+      closeTimer = setTimeout(requestClose, 5000);
+    };
+    const close = () => {
+      if (closed || closing) return;
+      closing = true;
+      if (ws.readyState === WebSocket.OPEN) requestFinalize();
+      else if (ws.readyState === WebSocket.CONNECTING) {
+        // Do not discard short utterances captured during the opening handshake.
+        closeTimer = setTimeout(() => ws.terminate(), 10000);
+      } else ws.terminate();
     };
 
     // -------------------------------------------------------

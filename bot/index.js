@@ -16,6 +16,7 @@ const { compile, findMatches, normalize } = require("./matcher");
 const { alertRoles } = require("./appeal-helpers");
 const createAppeals = require("./appeals");
 const { recordBeforeDelete } = require("./punishment-flow");
+const { createTranscriptCollector } = require("./voice-transcripts");
 
 const { PANEL_URL, BOT_KEY } = process.env;
 if (!PANEL_URL || !BOT_KEY) {
@@ -123,6 +124,8 @@ function connect(channel) {
     selfMute: true,
   });
   console.log(`🎧 Joined ${channel.name}`);
+  conn.on(VoiceConnectionStatus.Ready, () => console.log(`🎧 Voice receiver ready in ${channel.name}`));
+  conn.on("error", (e) => console.error(`⚠️ Voice connection failed in ${channel.name}:`, e.message));
 
   conn.on(VoiceConnectionStatus.Disconnected, async () => {
     try {
@@ -136,10 +139,12 @@ function connect(channel) {
     }
   });
 
-  conn.receiver.speaking.on("start", (userId) => {
+  conn.receiver.speaking.on("start", async (userId) => {
     if (listening.has(userId)) return;
-    const member = channel.guild.members.cache.get(userId);
+    const member = channel.guild.members.cache.get(userId) || await channel.guild.members.fetch(userId).catch(() => null);
     if (isIgnored(member)) return;
+    if (listening.has(userId)) return;
+    console.log(`🎙️ Voice activity: user ${userId} in ${channel.name}`);
     listen(conn, member, channel);
   });
   return conn;
@@ -153,16 +158,20 @@ function openDeepgram(member, channel, onText) {
     return null;
   }
   activeKeyId = account.id;
+  const collector = createTranscriptCollector((speech) => {
+    console.log(`📝 Voice transcript ready: user ${member.id}, ${speech.words.length} words`);
+    Promise.resolve(onText(speech)).catch((e) => console.error("⚠️ Voice moderation failed:", e.message));
+  });
   return deepgram.createStream({
     account,
     // Only safe server words are recognition hints. Sending slang here causes
     // Deepgram to hallucinate slang in ordinary speech (for example VC -> BC).
     keyterms: config.settings.server_words || [],
-    // Wait for Deepgram's end-of-speech decision. Acting on intermediate final
-    // segments makes background sounds much more likely to become a fake word.
-    onTranscript: (r) => r.isFinal && r.speechFinal && r.transcript && onText(r),
+    onTranscript: collector.accept,
+    onClose: collector.flush,
     onError: (err) => {
       const msg = String(err?.message || err);
+      console.warn(`⚠️ Voice transcription failed for user ${member.id}:`, msg);
       if (/401|402|403|insufficient|credit|balance|unauthori/i.test(msg)) {
         deepgram.markExhausted(account.id, msg.slice(0, 120));
         console.warn(`🔁 Switching away from Deepgram key #${account.id}`);
@@ -174,12 +183,11 @@ function openDeepgram(member, channel, onText) {
 // Saves Deepgram minutes:
 //  * 48 kHz stereo -> 16 kHz mono (what speech models use anyway, 6x less data)
 //  * silent frames are never sent (Deepgram bills per second of audio sent)
-//  * Deepgram is only opened after ~0.35 s of real speech, so coughs, clicks,
+//  * Deepgram is only opened after MIN_SPEECH_MS of real speech, so coughs, clicks,
 //    keyboard noise and breathing never open a stream at all
 const VAD_RMS = Number(process.env.VAD_THRESHOLD) || 1100; // background-noise floor
 const MIN_SPEECH_MS = Number(process.env.MIN_SPEECH_MS) || 500;
 const NOISE_MULTIPLIER = Number(process.env.NOISE_MULTIPLIER) || 2.4;
-const HANGOVER_FRAMES = 15; // keep ~300 ms after a word so endings aren't cut
 
 function toMono16k(pcm) {
   // input: 16-bit LE stereo 48 kHz. output: 16-bit LE mono 16 kHz
@@ -208,15 +216,34 @@ function listen(conn, member, channel) {
   let dg = null;
   let preroll = [];   // voiced frames held until we know it's real speech
   let voicedMs = 0;
-  let hang = 0;
   let noiseFloor = 250;
+  let silenceTimer = null;
+  let ended = false;
+  let frames = 0;
+  let peakRms = 0;
+
+  const finishSpeech = () => {
+    clearTimeout(silenceTimer);
+    if (accountId && bytes) deepgram.addUsage(accountId, bytes);
+    if (dg) {
+      console.log(`🎙️ Finalizing speech: user ${member.id}, ${bytes} audio bytes; no silence sent`);
+      dg.close();
+    }
+    dg = null;
+    accountId = null;
+    bytes = 0;
+    preroll = [];
+    voicedMs = 0;
+  };
 
   const cleanup = () => {
-    if (!listening.has(member.id)) return;
-    listening.delete(member.id);
-    try { dg?.close(); } catch {}
+    if (ended) return;
+    ended = true;
+    if (listening.get(member.id) === cleanup) listening.delete(member.id);
+    finishSpeech();
+    if (!frames) console.warn(`⚠️ No decoded voice audio for user ${member.id}; check voice receive/encryption support`);
+    else if (peakRms < VAD_RMS) console.log(`🎙️ Audio below speech gate: user ${member.id}, peak ${Math.round(peakRms)}, gate ${VAD_RMS}`);
     try { opus.destroy(); decoder.destroy(); } catch {}
-    if (accountId && bytes) deepgram.addUsage(accountId, bytes);
   };
   listening.set(member.id, cleanup);
 
@@ -224,18 +251,22 @@ function listen(conn, member, channel) {
     if (dg?.send(buf)) bytes += buf.length;
   };
 
-  decoder.on("error", () => {});
-  opus.on("error", cleanup);
-  opus.on("end", () => setTimeout(cleanup, dg ? 1500 : 0));
+  decoder.on("error", (e) => { console.error(`⚠️ Voice decoder failed for user ${member.id}:`, e.message); cleanup(); });
+  opus.on("error", (e) => { console.error(`⚠️ Voice receive failed for user ${member.id}:`, e.message); cleanup(); });
+  decoder.on("end", cleanup);
   opus.pipe(decoder).on("data", (pcm) => {
+    if (ended) return;
     const { out, rms } = toMono16k(pcm);
+    frames++;
+    peakRms = Math.max(peakRms, rms);
     const threshold = Math.max(VAD_RMS, noiseFloor * NOISE_MULTIPLIER);
     const voiced = rms >= threshold;
     // Learn stationary room/fan noise only while it is below the speech gate.
     // This lets the threshold adapt without treating normal speech as noise.
     if (!voiced) noiseFloor = noiseFloor * 0.97 + rms * 0.03;
-    if (voiced) hang = HANGOVER_FRAMES; else if (hang > 0) hang--;
-    if (!voiced && hang === 0) return; // silence: send nothing
+    if (!voiced) return; // Never send silence or below-gate background noise.
+    clearTimeout(silenceTimer);
+    silenceTimer = setTimeout(finishSpeech, 700);
 
     if (!dg) {
       preroll.push(out);
