@@ -78,7 +78,7 @@ module.exports = function createAppeals({ client, api, getSettings, canModerate 
     if (i.isModalSubmit() && i.customId.startsWith("appeal-submit:")) {
       await i.deferReply({ ephemeral: true });
       try {
-        const result = await api("appeal-submit", { method: "POST", body: { infraction_id: i.customId.split(":")[1], discord_user_id: i.user.id, explanation: i.fields.getTextInputValue("explanation") } });
+        await api("appeal-submit", { method: "POST", body: { infraction_id: i.customId.split(":")[1], discord_user_id: i.user.id, explanation: i.fields.getTextInputValue("explanation") } });
         await i.editReply("Your appeal is saved for moderator review. You will receive the decision by DM.");
         await deliverPending();
       } catch (e) { await i.editReply(`Could not submit appeal: ${e.message}`); }
@@ -100,8 +100,8 @@ module.exports = function createAppeals({ client, api, getSettings, canModerate 
         await api("appeal-finish", { method: "POST", body: { appeal_id: id, claim_token: claim.appeal.claim_token, moderator_id: i.user.id, approved, resolution } });
         const content = `${approved ? "APPROVED" : "REJECTED"} by ${i.user.tag}: ${resolution}`;
         await i.message.edit({ content, components: [], allowedMentions: { parse: [] } }).catch((e) => console.error("⚠️ Appeal review update:", e.message));
-        const user = await client.users.fetch(claim.infraction.discord_user_id);
-        await user.send({ content: `VoiceGuard appeal ${approved ? "approved" : "rejected"} by ${i.user.tag}.\nCase: ${claim.infraction.id}\n${resolution}`, allowedMentions: { parse: [] } }).catch((e) => console.warn("⚠️ Appeal decision DM:", e.message));
+        const user = await client.users.fetch(claim.infraction.discord_user_id).catch(() => null);
+        if (user) await user.send({ content: `VoiceGuard appeal ${approved ? "approved" : "rejected"} by ${i.user.tag}.\nCase: ${claim.infraction.id}\n${resolution}`, allowedMentions: { parse: [] } }).catch((e) => console.warn("⚠️ Appeal decision DM:", e.message));
         const logId = getSettings()?.log_channel_id;
         const logCh = logId && await client.channels.fetch(logId).catch(() => null);
         if (logCh?.isTextBased()) await logCh.send({ content: `${content}\nUser: ${claim.infraction.username} (${claim.infraction.discord_user_id}) · Case: ${claim.infraction.id}`, allowedMentions: { parse: [] } }).catch((e) => console.warn("⚠️ Appeal log:", e.message));

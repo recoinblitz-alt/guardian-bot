@@ -32,7 +32,7 @@ const offenseSchema = z.object({
   discord_user_id: z.string().min(1).max(32),
   username: z.string().max(100).default(""),
   channel_name: z.string().max(100).default(""),
-  guild_id: z.string().regex(/^\d{5,25}$/).optional(),
+  guild_id: z.string().regex(/^\d{5,25}$/).or(z.literal("")).default(""),
   ai_verdict: z.string().max(30).default(""),
   ai_reason: z.string().max(1000).default(""),
   category: z.enum(["mild", "abuse", "severe", "sexual", "provoking"]),
@@ -112,6 +112,7 @@ async function handle(request: Request, action: string) {
   if (!ctx) return json({ error: "Invalid bot key" }, 401);
   const { db, settings } = ctx;
   const url = new URL(request.url);
+  if (request.method !== "POST" && ["offense", "review-offense", "punishment-applied", "appeal-case", "appeal-submit", "appeal-posted", "appeal-claim", "appeal-release", "appeal-finish"].includes(action)) return json({ error: "POST required" }, 405);
 
   switch (action) {
     case "config": {
@@ -234,12 +235,16 @@ async function handle(request: Request, action: string) {
       const { data: target } = await db.from("punishment_appeals").select("infraction:infractions(guild_id)").eq("id", b.appeal_id).single();
       if (!target || (target.infraction as { guild_id: string } | null)?.guild_id !== b.guild_id) return json({ error: "Appeal belongs to a different server" }, 403);
       const claimToken = crypto.randomUUID();
-      const { data: appeal, error } = await db.from("punishment_appeals").update({ status: "processing", moderator_id: b.moderator_id, moderator_name: b.moderator_name, claim_token: claimToken, claimed_at: new Date().toISOString() }).eq("id", b.appeal_id).eq("status", "pending").select("*, infraction:infractions(*)").maybeSingle();
+      const staleBefore = new Date(Date.now() - 10 * 60_000).toISOString();
+      const { data: appeal, error } = await db.from("punishment_appeals").update({ status: "processing", moderator_id: b.moderator_id, moderator_name: b.moderator_name, claim_token: claimToken, claimed_at: new Date().toISOString() }).eq("id", b.appeal_id).or(`status.eq.pending,and(status.eq.processing,claimed_at.lt.${staleBefore})`).select("*, infraction:infractions(*)").maybeSingle();
       if (error) throw error;
       if (!appeal) return json({ error: "This appeal is already being reviewed or resolved" }, 409);
       const infraction = appeal.infraction;
       const { data: newer, error: newerError } = await db.from("infractions").select("id").eq("discord_user_id", infraction.discord_user_id).eq("guild_id", infraction.guild_id).eq("cleared", false).in("action", ["timeout", "ban"]).gt("created_at", infraction.created_at).limit(1);
-      if (newerError) throw newerError;
+      if (newerError) {
+        await db.from("punishment_appeals").update({ status: "pending", claim_token: null }).eq("id", b.appeal_id).eq("claim_token", claimToken);
+        throw newerError;
+      }
       return json({ appeal, infraction, newer_punishment: !!newer?.length });
     }
     case "appeal-release": {
