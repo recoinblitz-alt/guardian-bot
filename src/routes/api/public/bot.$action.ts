@@ -32,7 +32,7 @@ const offenseSchema = z.object({
   discord_user_id: z.string().min(1).max(32),
   username: z.string().max(100).default(""),
   channel_name: z.string().max(100).default(""),
-  guild_id: z.string().regex(/^\d{5,25}$/).optional(),
+  guild_id: z.string().regex(/^\d{5,25}$/).or(z.literal("")).default(""),
   ai_verdict: z.string().max(30).default(""),
   ai_reason: z.string().max(1000).default(""),
   category: z.enum(["mild", "abuse", "severe", "sexual", "provoking"]),
@@ -112,6 +112,7 @@ async function handle(request: Request, action: string) {
   if (!ctx) return json({ error: "Invalid bot key" }, 401);
   const { db, settings } = ctx;
   const url = new URL(request.url);
+  if (request.method !== "POST" && ["offense", "review-offense", "punishment-applied", "appeal-case", "appeal-submit", "appeal-posted", "appeal-claim", "appeal-release", "appeal-finish"].includes(action)) return json({ error: "POST required" }, 405);
 
   switch (action) {
     case "config": {
