@@ -235,12 +235,16 @@ async function handle(request: Request, action: string) {
       const { data: target } = await db.from("punishment_appeals").select("infraction:infractions(guild_id)").eq("id", b.appeal_id).single();
       if (!target || (target.infraction as { guild_id: string } | null)?.guild_id !== b.guild_id) return json({ error: "Appeal belongs to a different server" }, 403);
       const claimToken = crypto.randomUUID();
-      const { data: appeal, error } = await db.from("punishment_appeals").update({ status: "processing", moderator_id: b.moderator_id, moderator_name: b.moderator_name, claim_token: claimToken, claimed_at: new Date().toISOString() }).eq("id", b.appeal_id).eq("status", "pending").select("*, infraction:infractions(*)").maybeSingle();
+      const staleBefore = new Date(Date.now() - 10 * 60_000).toISOString();
+      const { data: appeal, error } = await db.from("punishment_appeals").update({ status: "processing", moderator_id: b.moderator_id, moderator_name: b.moderator_name, claim_token: claimToken, claimed_at: new Date().toISOString() }).eq("id", b.appeal_id).or(`status.eq.pending,and(status.eq.processing,claimed_at.lt.${staleBefore})`).select("*, infraction:infractions(*)").maybeSingle();
       if (error) throw error;
       if (!appeal) return json({ error: "This appeal is already being reviewed or resolved" }, 409);
       const infraction = appeal.infraction;
       const { data: newer, error: newerError } = await db.from("infractions").select("id").eq("discord_user_id", infraction.discord_user_id).eq("guild_id", infraction.guild_id).eq("cleared", false).in("action", ["timeout", "ban"]).gt("created_at", infraction.created_at).limit(1);
-      if (newerError) throw newerError;
+      if (newerError) {
+        await db.from("punishment_appeals").update({ status: "pending", claim_token: null }).eq("id", b.appeal_id).eq("claim_token", claimToken);
+        throw newerError;
+      }
       return json({ appeal, infraction, newer_punishment: !!newer?.length });
     }
     case "appeal-release": {

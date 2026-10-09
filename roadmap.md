@@ -1,8 +1,9 @@
 # Roadmap
 
-- [ ] Add durable punishment appeals, explanation submission, moderator decisions and specific-punishment reversal.
-- [ ] Support multiple reporting roles while preserving the existing selection.
-- [ ] Verify appeal safeguards and reporting controls.
+- [x] Add durable punishment appeals, explanation submission, moderator decisions and specific-punishment reversal.
+- [x] Support multiple reporting roles while preserving the existing selection.
+- [x] Verify appeal safeguards and signed-in reporting controls (4 appeal-policy tests, 12 AI tests; save/reload and unauthorized API rejection).
+- [ ] Verify appeals in the user's live Discord server. Blocked: the bot runs on the user's external host; redeploy and a real punishment/appeal are required.
 
 - [x] Send uncertain voice matches to moderator review.
 - [x] Add Warn, 10-minute Timeout, Ban, and Ignore controls.
