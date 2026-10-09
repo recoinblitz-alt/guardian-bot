@@ -872,3 +872,6 @@ REVOKE ALL ON FUNCTION public.finish_punishment_appeal(uuid,text,boolean,text,uu
 GRANT EXECUTE ON FUNCTION public.finish_punishment_appeal(uuid,text,boolean,text,uuid) TO service_role;
 REVOKE EXECUTE ON FUNCTION public.finish_punishment_appeal(uuid,text,boolean,text) FROM service_role;
 NOTIFY pgrst, 'reload schema';
+-- Punishment access repair
+GRANT ALL ON public.bot_settings, public.infractions, public.ai_decision_logs, public.punishment_appeals TO service_role;
+NOTIFY pgrst, 'reload schema';
