@@ -64,6 +64,13 @@
       "when": 1791441575185,
       "tag": "0008_appeal_reversal_tracking",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791530746653,
+      "tag": "0009_repair_ai_settings_and_punishment_access",
+      "breakpoints": true
     }
   ]
 }

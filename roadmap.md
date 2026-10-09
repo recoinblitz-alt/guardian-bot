@@ -1,5 +1,8 @@
 # Roadmap
 
+- [x] Prevent message deletion when punishment recording fails; surface failures to moderators and test the ordering (9 flow tests plus 4 appeal tests and 12 AI tests pass).
+- [x] Provide a rerunnable SQL upgrade for AI logging, appeals, and punishment recording permissions.
+
 - [x] Add durable punishment appeals, explanation submission, moderator decisions and specific-punishment reversal.
 - [x] Support multiple reporting roles while preserving the existing selection.
 - [x] Verify appeal safeguards and signed-in reporting controls (4 appeal-policy tests, 12 AI tests; save/reload and unauthorized API rejection).

@@ -76,6 +76,11 @@ export type Database = {
       }
       bot_settings: {
         Row: {
+          ai_api_key: string
+          ai_base_url: string
+          ai_enabled: boolean
+          ai_model: string
+          ai_provider: string
           alert_channel_id: string
           alert_role_id: string
           alert_role_ids: string[]
@@ -105,6 +110,11 @@ export type Database = {
           warning_expiry_days: number
         }
         Insert: {
+          ai_api_key?: string
+          ai_base_url?: string
+          ai_enabled?: boolean
+          ai_model?: string
+          ai_provider?: string
           alert_channel_id?: string
           alert_role_id?: string
           alert_role_ids?: string[]
@@ -134,6 +144,11 @@ export type Database = {
           warning_expiry_days?: number
         }
         Update: {
+          ai_api_key?: string
+          ai_base_url?: string
+          ai_enabled?: boolean
+          ai_model?: string
+          ai_provider?: string
           alert_channel_id?: string
           alert_role_id?: string
           alert_role_ids?: string[]
