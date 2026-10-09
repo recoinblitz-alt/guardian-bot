@@ -118,8 +118,7 @@ async function handle(request: Request, action: string) {
   switch (action) {
     case "config": {
       const { data: words } = await db.from("slang_words").select("category, word");
-      const { bot_api_key: _k, discord_token: _t, deepgram_keys: dk, ...rest } = settings as typeof settings & { ai_api_key?: string };
-      delete rest.ai_api_key;
+      const { bot_api_key: _k, discord_token: _t, deepgram_keys: dk, ai_api_key: _aiKey, ...rest } = settings;
       // fingerprint lets the bot notice credential changes without receiving them every minute
       const fp = `${_t.length}:${_t.slice(-6)}|${dk.map((k: string) => k.slice(-6)).join(",")}`;
       return json({ settings: rest, words: words ?? [], credentials_fp: fp });
