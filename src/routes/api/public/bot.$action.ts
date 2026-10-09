@@ -19,12 +19,13 @@ async function authorize(request: Request) {
 
 async function activePoints(db: any, userId: string, expiryDays: number) {
   const since = new Date(Date.now() - expiryDays * 86400_000).toISOString();
-  const { data } = await db
+  const { data, error } = await db
     .from("infractions")
     .select("points")
     .eq("discord_user_id", userId)
     .eq("cleared", false)
     .gte("created_at", since);
+  if (error) throw new Error(`Could not read active punishment points (${error.code || "database error"})`);
   return (data ?? []).reduce((s: number, r: { points: number }) => s + r.points, 0);
 }
 
@@ -180,7 +181,10 @@ async function handle(request: Request, action: string) {
         sexualInstantBan: settings.sexual_instant_ban,
       });
       const { data: infraction, error } = await db.from("infractions").insert({ ...o, action: d.action, duration_seconds: d.duration, points: d.points }).select("id").single();
-      if (error || !infraction) return json({ error: "Could not record punishment" }, 500);
+      if (error || !infraction) {
+        console.error("Punishment insert failed:", error?.code, error?.message);
+        return json({ error: "Could not record punishment. Apply the latest SQL upgrade and check server logs.", code: error?.code || "missing_infraction" }, 500);
+      }
       return json({ ...d, infraction_id: infraction.id });
     }
     case "review-offense": {
@@ -195,7 +199,10 @@ async function handle(request: Request, action: string) {
       });
       const d = { ...automatic, action: reviewedAction, duration: reviewedAction === "timeout" ? duration_seconds : 0 };
       const { data: infraction, error } = await db.from("infractions").insert({ ...o, action: d.action, duration_seconds: d.duration, points: d.points }).select("id").single();
-      if (error || !infraction) return json({ error: "Could not record punishment" }, 500);
+      if (error || !infraction) {
+        console.error("Reviewed punishment insert failed:", error?.code, error?.message);
+        return json({ error: "Could not record punishment. Apply the latest SQL upgrade and check server logs.", code: error?.code || "missing_infraction" }, 500);
+      }
       return json({ ...d, infraction_id: infraction.id });
     }
     case "punishment-applied": {

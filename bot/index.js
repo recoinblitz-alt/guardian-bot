@@ -15,6 +15,7 @@ const DeepgramManager = require("./deepgram-manager");
 const { compile, findMatches, normalize } = require("./matcher");
 const { alertRoles } = require("./appeal-helpers");
 const createAppeals = require("./appeals");
+const { recordBeforeDelete } = require("./punishment-flow");
 
 const { PANEL_URL, BOT_KEY } = process.env;
 if (!PANEL_URL || !BOT_KEY) {
@@ -357,7 +358,6 @@ async function moderate(member, channel, transcript, message = null, speech = nu
     }
     await postAiDecision(member, channel, m, checkedText, judged);
   }
-  if (message) await message.delete().catch((e) => console.warn("⚠️ couldn't delete message:", e.message));
   const last = cooldown.get(member.id) || 0;
   if (Date.now() - last < 4000) return;
   cooldown.set(member.id, Date.now());
@@ -365,12 +365,15 @@ async function moderate(member, channel, transcript, message = null, speech = nu
   console.log(`🚨 ${member.user.tag}: "${transcript}" → ${m.category} (${m.word})`);
   let d;
   try {
-    d = await api("offense", {
+    d = await recordBeforeDelete(() => api("offense", {
       method: "POST",
       body: { discord_user_id: member.id, username: member.user.tag, channel_name: (message ? "#" : "") + channel.name, guild_id: member.guild.id, ai_verdict: aiDecision?.verdict || "", ai_reason: aiDecision?.reason || "", category: m.category, matched: m.heard, transcript: checkedText },
-    });
+    }), message, (e) => console.warn("⚠️ couldn't delete message:", e.message));
   } catch (e) {
-    return console.error("⚠️", e.message);
+    cooldown.delete(member.id);
+    console.error("⚠️ Punishment recording failed; message left untouched:", e.message);
+    await reportPunishmentFailure(member, channel, "Could not record punishment. Message left untouched. Check the SQL upgrade and hosting logs.");
+    return;
   }
 
   const reason = `VoiceGuard case:${d.infraction_id}: ${d.reason} — said "${m.heard}"`;
@@ -388,10 +391,24 @@ async function moderate(member, channel, transcript, message = null, speech = nu
     else if (d.action === "ban") await member.ban({ reason, deleteMessageSeconds: 0 });
   } catch (e) {
     result = `failed: ${e.message}`;
+    console.error(`⚠️ Discord ${d.action} failed for case ${d.infraction_id}:`, e.message);
+    await reportPunishmentFailure(member, channel, `Recorded ${d.action}, but Discord could not complete it. Check the bot permissions, role position, and hosting logs.`);
   }
 
   if (d.action === "alert") await alert(member, channel, m, checkedText);
   await log(member, channel, m, checkedText, d, result, confidence);
+}
+
+async function reportPunishmentFailure(member, channel, detail) {
+  const id = config?.settings.alert_channel_id;
+  if (!id) return;
+  const target = await client.channels.fetch(id).catch(() => null);
+  if (!target?.isTextBased()) return;
+  const roles = alertRoles(config.settings);
+  await target.send({
+    content: `${roles.map((role) => `<@&${role}>`).join(" ")}\n⚠️ **Punishment failed** for <@${member.id}> in <#${channel.id}>. ${detail}`,
+    allowedMentions: { users: [], roles },
+  }).catch((e) => console.error("⚠️ Could not deliver punishment failure alert:", e.message));
 }
 
 async function postAiDecision(member, channel, m, transcript, decision) {

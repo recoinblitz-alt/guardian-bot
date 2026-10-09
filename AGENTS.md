@@ -10,6 +10,7 @@
 <!-- LOVABLE:END -->
 
 ## Architecture rules
+- Automatic text moderation records and validates the punishment before deleting a message; recording and Discord action failures alert moderators. Why: database failures must never silently result in deletion without a recorded punishment.
 - The Discord bot runs outside Lovable (user's 24/7 host); this app is only the control panel + API. Why: voice listening needs a persistent process.
 - Bot talks to the app only via `/api/public/bot/$action` authenticated by `x-bot-key` (stored in `bot_settings.bot_api_key`). Why: no service keys leave the backend.
 - Punishment appeals are stored per infraction, submitted only for the Discord interaction user's own case, and claimed atomically before moderator decisions; pardon only that case and reverse Discord restrictions only when their recorded expiry or case-tagged ban reason still matches. Why: survive restarts, block duplicate decisions, and never undo another punishment.
